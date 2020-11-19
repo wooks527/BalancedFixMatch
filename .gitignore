@@ -1,0 +1,6 @@
+.ipynb_checkpoints/
+data/
+trained_models/
+
+*.pyc
+train_and_test_aivdnet_with_fixmatch.ipynb
