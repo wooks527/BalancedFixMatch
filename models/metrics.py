@@ -13,12 +13,18 @@ def update_batch_metrics(batch_metrics, preds, labels):
             
     return batch_metrics
 
-def get_epoch_metrics(running_loss, dataset_sizes, phase, running_corrects, batch_metrics, metric_types, epsilon=sys.float_info.epsilon):
+def get_epoch_metrics(running_loss, dataset_sizes, phase, running_corrects, batch_metrics,
+                      metric_types, mask_ratio=None, epsilon=sys.float_info.epsilon):
     epoch_metrics = defaultdict(dict)
     epoch_metrics['loss']['All'] = running_loss / dataset_sizes[phase]
     epoch_metrics['acc'] = defaultdict(float, {c: round(float(n) / batch_metrics['size'][c], 4)
                                                 for c, n in batch_metrics['tp'].items()})
     epoch_metrics['acc']['All'] = running_corrects.double() / dataset_sizes[phase]
+    
+    
+    epoch_loss = running_loss / dataset_sizes[phase if phase != 'train' else 'train_lb']
+    epoch_acc = running_corrects.double() / dataset_sizes[phase if phase != 'train' else 'train_lb']
+    
     if 'f1' in metric_types:
         epoch_metrics['ppv'] = defaultdict(float, {c: round(float(n) / (batch_metrics['tp'][c]
                                                                         + sum([s for c_temp, s in batch_metrics['fp'].items()
@@ -53,7 +59,7 @@ def update_mean_metrics(cls_names, mean_metrics, metrics=None, status='training'
     return mean_metrics
     
 
-def print_metrics(epoch_metrics, cls_names, phase=''):
+def print_metrics(epoch_metrics, cls_names, phase='', mask_ratio=None):
     if 'Best' in phase:
         print(f'\n{"-"*20}')
 
@@ -66,4 +72,7 @@ def print_metrics(epoch_metrics, cls_names, phase=''):
             for img_cls in cls_names:
                 results += f' {img_cls}: {targets[img_cls]:.4f} '
         print(results)
+        
+    if mask_ratio:
+        print(f'Mask ratio\'s range: {1 - max(mask_ratio)} ~ {1 - min(mask_ratio)}')
     print()
