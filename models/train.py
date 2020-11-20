@@ -11,11 +11,35 @@ from models.metrics import update_batch_metrics, get_epoch_metrics, print_metric
 def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_types, dataset_types,
                 data_loaders, dataset_sizes, device, num_epochs=25, batch_size=4, patience=5,
                 lambda_u=1.0, threshold=0.95, purpose='baseline'):
-    '''Train the model'''
+    '''Train the model.
+    
+    Args:
+        model (obj): the model which will be trained
+        criterion (obj): the loss function (e.g. cross entropy)
+        optimizer (obj): the optimizer (e.g. Adam)
+        scheduler (obj): the learning scheduler (e.g. Step decay)
+        i (int): the number indicating which model it is
+        cls_names (list): class names to calculate performance metrics of the model including "All"
+                          (e.g. ['All', 'COVID-19', 'Pneumonia', 'Normal'])
+        metric_types (list): the performance metrics of the model (e.g. Accuracy, F1-Score and so on)
+        dataset_types (list): dataset types for train and test (e.g. ['train', 'test'] or ['train', 'val', 'test])
+        data_loaders (list): data loaders applied transformations, the batch size and so on
+        dataset_sizes (dict): sizes of train and test datasets
+        device (obj): the device where the model will be trained (e.g. cpu or gpu)
+        num_epochs (int): the number of epochs
+        batch_size (int): the batch size
+        patience (int): the number of patience times for early stopping
+        lambda_u (float): the ratio of reflect unlabeled loss
+        threshold (float): the treshold for predicted results for unlabeled data
+        purpose (str): the purpose of the model
+    
+    Returns:
+        model (obj): the model which was trained
+        metrics (dict): the results of the performance metrics after training the model
+    '''
     
     since = time.time()
 
-#     best_model_wts = copy.deepcopy(model.state_dict())
     early_stopping = EarlyStopping(patience=patience, verbose=True)
     metrics = {m_type: defaultdict(float) for m_type in metric_types}
     
@@ -24,7 +48,7 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
 
-        # Each epoch has a training and validation phase
+        # Each epoch has a training and test phase
         for phase in dataset_types:
             if phase == 'train':
                 model.train()  # Set model to training mode
@@ -83,10 +107,10 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
                         loss.backward()
                         optimizer.step()
                         
-                # statistics
+                # Calculate loss and metrics per the batch
                 if purpose == 'baseline' or phase == 'test':
                     running_loss += loss.item() * inputs.size(0)
-                else: #fixmatch
+                else: # FixMatch
                     running_loss += loss_lb.item() * inputs_lb.size(0) \
                                  + loss_ulb * lambda_u * inputs_ulb.size(0)
                     
@@ -98,6 +122,7 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
             if phase == 'train':
                 scheduler.step()
             
+            # Calcluate the metrics (e.g. Accuracy) per the epoch
             phase_for_epoch_metrics = phase
             if phase == 'train' and purpose == 'fixmatch':
                 phase_for_epoch_metrics = 'train_lb'
@@ -105,12 +130,15 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
                                               running_corrects, batch_metrics, metric_types)
             print_metrics(epoch_metrics, cls_names, phase=phase, mask_ratio=mask_ratio)
 
+        # Check early stopping
         if phase == 'test':
             early_stopping(epoch_metrics['loss']['All'], model)
             if early_stopping.early_stop:
                 print("Early stopping!!")
                 break
 
+    # Set best metrics based on epoch metrics
+    # This best metrics can be changed by how calculate the best metrics
     for metric_type in metric_types:
         for img_cls in cls_names:
             metrics[metric_type][img_cls] = epoch_metrics[metric_type][img_cls]
@@ -124,9 +152,12 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
 
 
 class EarlyStopping:
-    """Early stops the training if validation loss doesn't improve after a given patience (Source: https://github.com/Bjarten/early-stopping-pytorch)."""
+    '''Early stops the training if validation loss doesn't improve after a given patience.
+       This code is referenced in the GitHub repository, "https://github.com/Bjarten/early-stopping-pytorch".
+    '''
+    
     def __init__(self, patience=7, verbose=False, delta=0, trace_func=print):
-        """
+        '''Init EarlyStopping object.
         Args:
             patience (int): How long to wait after last time validation loss improved.
                             Default: 7
@@ -136,7 +167,7 @@ class EarlyStopping:
                             Default: 0
             trace_func (function): trace print function.
                             Default: print            
-        """
+        '''
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
@@ -147,24 +178,31 @@ class EarlyStopping:
         self.trace_func = trace_func
         
     def __call__(self, val_loss, model):
-
+        '''Call function to check the early stopping case
+        Args:
+            val_loss (folat): the validation loss
+            model (obj): the model which is training
+        '''
         score = -val_loss
 
+        # First update
         if self.best_score is None:
             self.best_score = score
-            self.update_val_loss_min(val_loss, model)
+            self.update_val_loss_min(val_loss)
+        # Early stopping case when the loss is still decreasing
         elif score < self.best_score + self.delta:
             self.counter += 1
             self.trace_func(f'EarlyStopping counter: {self.counter} out of {self.patience}\n')
             if self.counter >= self.patience:
                 self.early_stop = True
+        # The case which still need to be updated
         else:
             self.best_score = score
-            self.update_val_loss_min(val_loss, model)
+            self.update_val_loss_min(val_loss)
             self.counter = 0
 
-    def update_val_loss_min(self, val_loss, model):
-        '''Saves model when validation loss decrease.'''
+    def update_val_loss_min(self, val_loss):
+        '''Update the minimum validation loss when validation loss decrease.'''
         if self.verbose:
             self.trace_func(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).\n')
             
