@@ -10,7 +10,7 @@ from models.metrics import update_batch_metrics, get_epoch_metrics, print_metric
 
 def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_types, dataset_types,
                 data_loaders, dataset_sizes, device, num_epochs=25, batch_size=4, patience=5,
-                lambda_u=1.0, threshold=0.95, purpose='baseline'):
+                lambda_u=1.0, threshold=0.95, purpose='baseline',is_early=True):
     '''Train the model.
     
     Args:
@@ -39,8 +39,8 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
     '''
     
     since = time.time()
-
-    early_stopping = EarlyStopping(patience=patience, verbose=True)
+    if is_early:
+        early_stopping = EarlyStopping(patience=patience, verbose=True)
     metrics = {m_type: defaultdict(float) for m_type in metric_types}
     
     print(f'{"-"*20}\nModel {i+1}\n{"-"*20}\n')
@@ -131,7 +131,7 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
             print_metrics(epoch_metrics, cls_names, phase=phase, mask_ratio=mask_ratio)
 
         # Check early stopping
-        if phase == 'test':
+        if phase == 'test' and is_early:
             early_stopping(epoch_metrics['loss']['All'], model)
             if early_stopping.early_stop:
                 print("Early stopping!!")
