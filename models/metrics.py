@@ -44,27 +44,28 @@ def get_epoch_metrics(running_loss, dataset_sizes, phase, running_corrects, batc
     '''
     epoch_metrics = defaultdict(dict)
     epoch_metrics['loss']['All'] = running_loss / dataset_sizes[phase]
-    epoch_metrics['acc'] = defaultdict(float, {c: round(float(n) / batch_metrics['size'][c], 4)
-                                                for c, n in batch_metrics['tp'].items()})
     epoch_metrics['acc']['All'] = running_corrects.double() / dataset_sizes[phase]
     
-    
-    epoch_loss = running_loss / dataset_sizes[phase if phase != 'train' else 'train_lb']
-    epoch_acc = running_corrects.double() / dataset_sizes[phase if phase != 'train' else 'train_lb']
-    
+    cls_names = ('COVID-19', 'Pneumonia', 'Normal')
+    if 'ppv' in metric_types:
+        epoch_metrics['ppv'] = defaultdict(float, {c: round(float(batch_metrics['tp'][c])
+                                                            / (batch_metrics['tp'][c]
+                                                               + batch_metrics['fp'][c]
+                                                               + epsilon), 4)
+                                                   for c in cls_names})
+    if 'recall' in metric_types:
+        epoch_metrics['recall'] = defaultdict(float, {c: round(float(batch_metrics['tp'][c])
+                                                                / (batch_metrics['tp'][c]
+                                                                   + batch_metrics['fn'][c]
+                                                                   + epsilon), 4)
+                                                      for c in cls_names})
     if 'f1' in metric_types:
-        epoch_metrics['ppv'] = defaultdict(float, {c: round(float(n) / (batch_metrics['tp'][c]
-                                                                        + sum([s for c_temp, s in batch_metrics['fp'].items()
-                                                                               if c_temp != c])), 4)
-                                                   for c, n in batch_metrics['tp'].items()})
-        epoch_metrics['recall'] = defaultdict(float, {c: round(float(n) / (batch_metrics['tp'][c]
-                                                                           + sum([s for c_temp, s in batch_metrics['fn'].items()
-                                                                                  if c_temp != c])), 4)
-                                                      for c, n in batch_metrics['tp'].items()})
-        epoch_metrics['f1'] = {c: round(2 * epoch_metrics['ppv'][c] * epoch_metrics['recall'][c] / (epoch_metrics['ppv'][c]
-                                                                                                    + epoch_metrics['recall'][c]
-                                                                                                    + epsilon), 4)
-                               for c in ('COVID-19', 'Pneumonia', 'Normal')}
+        epoch_metrics['f1'] = {c: round(2 * epoch_metrics['ppv'][c]
+                                          * epoch_metrics['recall'][c]
+                                          / (epoch_metrics['ppv'][c]
+                                             + epoch_metrics['recall'][c]
+                                             + epsilon), 4)
+                               for c in cls_names}
         epoch_metrics['f1']['All'] = sum([f for f in epoch_metrics['f1'].values()]) / 3
     
     return epoch_metrics
@@ -85,14 +86,20 @@ def update_mean_metrics(cls_names, mean_metrics, metrics=None, status='training'
     '''
     if status == 'training':
         for metric_type, targets in metrics.items():
-            for img_cls in cls_names:
-                if targets.get(img_cls):
-                    mean_metrics[metric_type][img_cls] += targets[img_cls]
+            if metric_type == 'acc':
+                mean_metrics[metric_type]['All'] += targets['All']
+            else:
+                for img_cls in cls_names:
+                    if targets.get(img_cls):
+                        mean_metrics[metric_type][img_cls] += targets[img_cls]
     else: # final
         for metric_type, targets in mean_metrics.items():
-            for img_cls in cls_names:
-                if targets.get(img_cls):
-                    mean_metrics[metric_type][img_cls] /= fold
+            if metric_type == 'acc':
+                mean_metrics[metric_type]['All'] /= fold
+            else:
+                for img_cls in cls_names:
+                    if targets.get(img_cls):
+                        mean_metrics[metric_type][img_cls] /= fold
 
     return mean_metrics
     
@@ -117,7 +124,7 @@ def print_metrics(epoch_metrics, cls_names, phase='', mask_ratio=None):
     print(f'[{phase}]')
     for metric_type, targets in epoch_metrics.items():
         results = f'{metric_type.upper()} -'
-        if metric_type == 'loss':
+        if metric_type == 'loss' or metric_type == 'acc':
             results += f' {targets["All"]:.4f}'
         else:
             for img_cls in cls_names:

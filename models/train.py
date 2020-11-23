@@ -10,7 +10,7 @@ from models.metrics import update_batch_metrics, get_epoch_metrics, print_metric
 
 def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_types, dataset_types,
                 data_loaders, dataset_sizes, device, num_epochs=25, batch_size=4, patience=5,
-                lambda_u=1.0, threshold=0.95, purpose='baseline',is_early=True):
+                lambda_u=1.0, threshold=0.95, purpose='baseline', is_early=True):
     '''Train the model.
     
     Args:
@@ -140,8 +140,11 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
     # Set best metrics based on epoch metrics
     # This best metrics can be changed by how calculate the best metrics
     for metric_type in metric_types:
-        for img_cls in cls_names:
-            metrics[metric_type][img_cls] = epoch_metrics[metric_type][img_cls]
+        if metric_type == 'acc':
+            metrics[metric_type]['All'] = epoch_metrics[metric_type]['All']
+        else:
+            for img_cls in cls_names:
+                metrics[metric_type][img_cls] = epoch_metrics[metric_type][img_cls]
             
     print_metrics(metrics, cls_names, phase='Best results')
     time_elapsed = time.time() - since

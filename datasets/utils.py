@@ -6,209 +6,8 @@ import glob
 import os
 import random
 
-from torchvision import datasets, transforms
+from torchvision import datasets
 from matplotlib import pyplot as plt
-from datasets.randaugment import *
-
-def get_data_transforms(purpose='baseline'):
-    '''Data augmentation and normalization
-    
-    Args:
-        purpose (str): the purpose of the model
-    
-    Returns:
-        data_transforms (dict): transformation methods for train, validation and test
-        
-    '''
-    if purpose == 'baseline':
-        data_trainsforms = {
-            'train': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'val': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'test': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-        }
-    elif purpose == 'fixmatch': # FixMatch
-        data_transforms = {
-            'train_lb': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'train_ulb': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            # This is based on COVIDNet settings.
-            'train_ulb_wa': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.RandomAffine(degrees=10, translate=(0, 0.1), scale=(0.85, 1.15)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(brightness=(0.9, 1.1)), #, contrast=(0.9, 1.1)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'val': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'test': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-        }
-    elif purpose == 'fixaug1':  # FixMatch
-        data_transforms = {
-            'train_lb': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.RandomAffine(degrees=(-5,5), translate=(0.1, 0.1), scale=(0.925, 1.075)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(brightness=(0.95, 1.05)),  # , contrast=(0.9, 1.1)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'train_ulb': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.RandomAffine(degrees=(-5,5), translate=(0.1, 0.1), scale=(0.925, 1.075)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(brightness=(0.95, 1.05)),  # , contrast=(0.9, 1.1)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            # This is based on COVIDNet settings.
-            'train_ulb_wa': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.RandomAffine(degrees=(-10,10), translate=(0.1, 0.1), scale=(0.85, 1.15)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(brightness=(0.9, 1.1)),  # , contrast=(0.9, 1.1)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'val': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'test': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-        }
-    elif purpose == 'fixaug2':  # FixMatch
-        data_transforms = {
-            'train_lb': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.RandomAffine(degrees=(-10,10), translate=(0.1, 0.1), scale=(0.85, 1.15)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(brightness=(0.9, 1.1)),  # , contrast=(0.9, 1.1)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'train_ulb': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.RandomAffine(degrees=(-10,10), translate=(0.1, 0.1), scale=(0.85, 1.15)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(brightness=(0.9, 1.1)),  # , contrast=(0.9, 1.1)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'train_ulb_wa': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.RandomAffine(degrees=(-10,10), translate=(0.1, 0.1), scale=(0.85, 1.15)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(brightness=(0.9, 1.1)),  # , contrast=(0.9, 1.1)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'val': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'test': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-        }
-        data_transforms['train_ulb_wa'].transforms.insert(0,RandAugment(3))
-    elif purpose == 'fixaug3':  # FixMatch
-        data_transforms = {
-            'train_lb': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.RandomAffine(degrees=(-10,10), translate=(0.1, 0.1), scale=(0.85, 1.15)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(brightness=(0.9, 1.1)),  # , contrast=(0.9, 1.1)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'train_ulb': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.RandomAffine(degrees=(-10,10), translate=(0.1, 0.1), scale=(0.85, 1.15)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(brightness=(0.9, 1.1)),  # , contrast=(0.9, 1.1)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'train_ulb_wa': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.RandomAffine(degrees=(-10,10), translate=(0.1, 0.1), scale=(0.85, 1.15)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(brightness=(0.9, 1.1)),  # , contrast=(0.9, 1.1)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'val': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-            'test': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
-        }
-        data_transforms['train_ulb_wa'].transforms.insert(0,RandAugment(3,purpose ='fixaug3'))
-
-    return data_transforms
 
 def separate_datasets(data_dir, fold, labeled_num_per_cls, mu):
     '''Separate train datasets into labeled and unlabeled datasets.
@@ -296,10 +95,17 @@ def get_data_loaders(data_transforms, fold, batch_size, dataset_types, data_dir,
                                                                                                    else f'{f_name[x[:-2]]}/{x}/'),
                                                                  data_transforms[x if 'train' not in x else x[:-2]])
                               for x in [f'train_lb_{i}', f'train_ulb_{i}', f'train_ulb_wa_{i}', 'test']}
-            data_loaders.append({x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size if 'ulb' not in x
-                                                                                                         else batch_size*mu,
+
+            # train_lb, test case (apply shuffle)
+            data_loaders.append({x: torch.utils.data.DataLoader(image_datasets[x],
+                                                                batch_size=batch_size,
                                                                 shuffle=True, num_workers=4)
-                                 for x in ['train_lb', 'train_ulb', 'train_ulb_wa', 'test']})
+                                 for x in ['train_lb', 'test']})
+            # train_ulb, train_ulb_wa case (not apply shuffle) - because of consistency loss
+            data_loaders.append({x: torch.utils.data.DataLoader(image_datasets[x],
+                                                                batch_size=batch_size*mu,
+                                                                num_workers=4)
+                                 for x in ['train_ulb', 'train_ulb_wa']})
             
     if purpose == 'baseline':
         dataset_sizes = {x: len(image_datasets[x]) for x in dataset_types}
