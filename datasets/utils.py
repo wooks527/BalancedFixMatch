@@ -11,6 +11,15 @@ from matplotlib import pyplot as plt
 from PIL import Image
 
 def separate_datasets(data_dir, fold, labeled_num_per_cls, mu,outpath = './data/CXR'):
+    '''
+    Split the dataset randomly by 'fold' parameter.
+    Args:
+        data_dir: Root path of dataset. ex) ./data/CXR or ./data/CT
+        fold: Number of times to split data
+        labeled_num_per_cls, mu: Number of labeled image per class. Number of unlabeld image will be labeled_num_per_cls * mu per class.
+        outpath: Root path where the text file(train_lb_%.txt, train_ulb_%.txt) will be saved
+    '''
+
     class_name = ['covid-19','pneumonia','normal']
 
     if not os.path.exists(outpath):
@@ -34,6 +43,14 @@ def separate_datasets(data_dir, fold, labeled_num_per_cls, mu,outpath = './data/
     return True
 
 def make_baseline_dataset(data_dir,labeled_num_per_cls,outpath = './data/CXR'):
+    '''
+    Make baseline dataset text file
+    Args:
+        data_dir: Root path of dataset. ex) ./data/CXR or ./data/CT
+        labeled_num_per_cls: Number of image per class. It is only used for train dataset
+        outpath: Root path where the text file(train.txt, test.txt) will be saved
+    '''
+
     class_name = ['covid-19', 'pneumonia', 'normal']
 
     if not os.path.exists(outpath):
@@ -58,7 +75,22 @@ def make_baseline_dataset(data_dir,labeled_num_per_cls,outpath = './data/CXR'):
     return True
 
 class CovidDataLoader(torch.utils.data.Dataset):
+    '''
+    Custom data loader for covid data.
+    Return:
+        new_batch['img_lb'] = [b,224,224,3]
+        new_batch['label'] = [b]
+        new_batch['img_ulb'] = [b*mu,224,224,3] (Return only when purpose is not baseline)
+        new_batch['img_ulb_wa'] = [b*mu,224,224,3] (Return only when purpose is not baseline)
+    '''
     def __init__(self,dataset_types,cfg,fold_id=None):
+        '''
+        Args:
+            dataset_types: It distinguishes whether it is a train or a test through the corresponding parameter.
+            cfg: The cfg parameter must have purpose, data dir information and mu (Used only when purpose is not baseline).
+            fold_id: It is used when the purpose is fixmatch and means fold number.
+                    This information is used to read the appropriate txt file.
+        '''
         self.type= dataset_types
         self.cfg = cfg
         self.class_names = {0:'Covid-19',1:'Pneumonia',2:'Normal'}
@@ -102,11 +134,11 @@ class CovidDataLoader(torch.utils.data.Dataset):
         img_lb = self.load_image(self.image_lb_paths[idx])
         label = torch.LongTensor([self.labels[idx]])
 
-        if self.cfg['purpose']=='baseline' or 'train' not in self.type:
+        if self.cfg['purpose']=='baseline' or 'train' not in self.type: # for baseline, test
             img_lb = self.transformer['{}'.format(self.type)](img_lb)
             return {'img_lb':img_lb,'label': label}
         else:
-            img_lb = self.transformer['{}'.format('train_lb')](img_lb)
+            img_lb = self.transformer['{}'.format('train_lb')](img_lb) # for fixmatch
 
             img_unlabel = [self.load_image(self.image_ulb_paths[i]) for i in range(idx*self.cfg['mu'],(idx+1)*self.cfg['mu'])]
             img_ulb = torch.cat([self.transformer['train_ulb'](img_u).unsqueeze(0) for img_u in img_unlabel.copy()],0)
@@ -115,18 +147,29 @@ class CovidDataLoader(torch.utils.data.Dataset):
 
     @staticmethod
     def collate_fn(batch):
-        if 'img_ulb' in batch[0].keys():
+        if 'img_ulb' in batch[0].keys(): # for fixmatch
             new_batch = {'img_lb' : torch.stack([b['img_lb'] for b in batch],0),
                          'label' : torch.cat([b['label'] for b in batch],0),
                          'img_ulb' : torch.cat([b['img_ulb'] for b in batch],0),
                          'img_ulb_wa' : torch.cat([b['img_ulb_wa'] for b in batch],0),}
-        else:
+        else: # for baseline, test
             new_batch = {'img_lb': torch.stack([b['img_lb'] for b in batch], 0),
                          'label': torch.cat([b['label'] for b in batch], 0)}
         return new_batch
 
 
 def preprocess(class_names,inputs, classes=None, mu=4):
+    '''
+    Args:
+        class_names: Recommend {0:'Covid-19',1:'Pneumonia',2:'Normal'}
+        inputs: Data of image
+        classes: Data of label
+        mu:
+
+    Returns:
+        inp : Preprocessed image (0.0~1.0)
+        title : Label data in string format
+    '''
     inputs = inputs[:mu]
     inp = torchvision.utils.make_grid(inputs)
 
@@ -146,6 +189,16 @@ def preprocess(class_names,inputs, classes=None, mu=4):
 
 
 def show_samples(data_loader, class_names, iter_num=1, mu=4):
+    '''
+    This function is used to check if the data loader properly loaded the image.
+    Args:
+        data_loader: CovidDataLoader class
+        class_names: Recommend {0:'Covid-19',1:'Pneumonia',2:'Normal'}
+        iter_num: This parameter is for how many iterations to check based on batch size 1.
+        mu: If the data loader has 2 key values, it is not used.
+    Returns:
+
+    '''
     for i, batch in enumerate(data_loader):
         img, labels = preprocess(class_names,batch['img_lb'], batch['label'],mu=mu)
 
