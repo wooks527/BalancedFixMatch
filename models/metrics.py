@@ -12,7 +12,7 @@ def update_batch_metrics(batch_metrics, preds, labels):
     Returns:
         batch_metrics (dict): performance metrics for batch (e.g. Accuracy)
     '''
-    CLS = {0: 'COVID-19', 1: 'Pneumonia', 2: 'Normal'}
+    CLS = {0: 'COVID-19', 1: 'Normal', 2: 'Pneumonia'}
     for pred, label in zip(preds, labels.data):
         batch_metrics['size'][CLS[label.item()]] += 1
         if pred == label.data:
@@ -20,7 +20,7 @@ def update_batch_metrics(batch_metrics, preds, labels):
         else:
             batch_metrics['fp'][CLS[pred.item()]] += 1
             batch_metrics['fn'][CLS[label.item()]] += 1
-            
+
     return batch_metrics
 
 def get_epoch_metrics(running_loss, dataset_sizes, phase, running_corrects, batch_metrics,
@@ -46,7 +46,7 @@ def get_epoch_metrics(running_loss, dataset_sizes, phase, running_corrects, batc
     epoch_metrics['loss']['All'] = running_loss / dataset_sizes[phase]
     epoch_metrics['acc']['All'] = running_corrects.double() / dataset_sizes[phase]
     
-    cls_names = ('COVID-19', 'Pneumonia', 'Normal')
+    cls_names = ('COVID-19', 'Normal', 'Pneumonia')
     if 'ppv' in metric_types:
         epoch_metrics['ppv'] = defaultdict(float, {c: round(float(batch_metrics['tp'][c])
                                                             / (batch_metrics['tp'][c]
