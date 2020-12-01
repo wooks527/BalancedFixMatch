@@ -57,12 +57,12 @@ def make_baseline_dataset(data_dir,labeled_num_per_cls,outpath = './data/CXR'):
     print('"test.txt" created in {}'.format(outpath))
     return True
 
-class Data_loader(torch.utils.data.Dataset):
+class CovidDataLoader(torch.utils.data.Dataset):
     def __init__(self,dataset_types,cfg,fold_id=None):
         self.type= dataset_types
         self.cfg = cfg
-        self.class_names = {0:'Covid-19',1:'Normal',2:'Pneumonia'}
-        self.name2label = {'covid-19':0,'normal':1,'pneumonia':2}
+        self.class_names = {0:'Covid-19',1:'Pneumonia',2:'Normal'}
+        self.name2label = {'covid-19':0,'pneumonia':1,'normal':2}
         self.transformer = get_data_transforms(cfg['purpose'])
         if 'train' not in dataset_types:
             self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'],'{}.txt'.format(dataset_types)))
