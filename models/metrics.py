@@ -20,7 +20,6 @@ def update_batch_metrics(batch_metrics, preds, labels):
         else:
             batch_metrics['fp'][CLS[pred.item()]] += 1
             batch_metrics['fn'][CLS[label.item()]] += 1
-            
     return batch_metrics
 
 def get_epoch_metrics(running_loss, dataset_sizes, phase, running_corrects, batch_metrics,
@@ -67,7 +66,6 @@ def get_epoch_metrics(running_loss, dataset_sizes, phase, running_corrects, batc
                                              + epsilon), 4)
                                for c in cls_names}
         epoch_metrics['f1']['All'] = sum([f for f in epoch_metrics['f1'].values()]) / 3
-    
     return epoch_metrics
 
 def update_mean_metrics(cls_names, mean_metrics, metrics=None, status='training', fold=None):

@@ -8,11 +8,12 @@ import torch
 from collections import defaultdict
 from models.metrics import update_batch_metrics, get_epoch_metrics, print_metrics
 
+
 def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_types, dataset_types,
                 data_loaders, dataset_sizes, device, num_epochs=25, batch_size=4, patience=5,
                 lambda_u=1.0, threshold=0.95, purpose='baseline', is_early=True):
     '''Train the model.
-    
+
     Args:
         model (obj): the model which will be trained
         criterion (obj): the loss function (e.g. cross entropy)
@@ -32,18 +33,18 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
         lambda_u (float): the ratio of reflect unlabeled loss
         threshold (float): the treshold for predicted results for unlabeled data
         purpose (str): the purpose of the model
-    
+
     Returns:
         model (obj): the model which was trained
         metrics (dict): the results of the performance metrics after training the model
     '''
-    
+
     since = time.time()
     if is_early:
         early_stopping = EarlyStopping(patience=patience, verbose=True)
     metrics = {m_type: defaultdict(float) for m_type in metric_types}
-    
-    print(f'{"-"*20}\nModel {i+1}\n{"-"*20}\n')
+
+    print(f'{"-" * 20}\nModel {i + 1}\n{"-" * 20}\n')
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
@@ -53,26 +54,25 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
             if phase == 'train':
                 model.train()  # Set model to training mode
             else:
-                model.eval()   # Set model to evaluate mode
+                model.eval()  # Set model to evaluate mode
 
             running_loss = 0.0
             running_corrects = 0
             batch_metrics = {'tp': defaultdict(int), 'size': defaultdict(int),
                              'fp': defaultdict(int), 'fn': defaultdict(int)}
-            mask_ratio = [] # just for fixmatch
+            mask_ratio = []  # just for fixmatch
 
             phase_for_data_loader = phase
-            if purpose == 'fixmatch' and phase == 'train':
-                phase_for_data_loader = 'train_lb'
-                
+            # if purpose == 'fixmatch' and phase == 'train':
+            #     phase_for_data_loader = 'train_lb'
+
             # Iterate over data.
-            for inputs, labels in data_loaders[i][phase_for_data_loader]:
-                inputs = inputs.to(device)
+            for batch in data_loaders[phase_for_data_loader]:
+                inputs_lb, labels = batch['img_lb'], batch['label']
+                inputs_lb = inputs_lb.to(device)
                 labels = labels.to(device)
-                if purpose == 'fixmatch' and phase == 'train':
-                    inputs_lb, labels_lb = inputs, labels
-                    inputs_ulb, _ = next(iter(data_loaders[i]['train_ulb']))
-                    inputs_ulb_wa, _ = next(iter(data_loaders[i]['train_ulb_wa']))
+                if purpose != 'baseline' and phase == 'train':
+                    inputs_ulb, inputs_ulb_wa = batch['img_ulb'], batch['img_ulb_wa']
                     inputs_ulb = inputs_ulb.to(device)
                     inputs_ulb_wa = inputs_ulb_wa.to(device)
 
@@ -82,16 +82,10 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
                 # forward
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
-                    if purpose == 'baseline' or phase == 'test':
-                        outputs = model(inputs)
-                        _, preds = torch.max(outputs, 1)
-                        loss = criterion(outputs, labels)
-                    else: # fixmatch in train
-                        outputs_lb = model(inputs_lb)
-                        _, preds_lb = torch.max(outputs_lb, 1)
-                        loss_lb = criterion(outputs_lb, labels_lb)
-
-                        loss_ulb, masks = 0, 0.0
+                    outputs = model(inputs_lb)
+                    _, preds = torch.max(outputs, 1)
+                    loss = criterion(outputs, labels)
+                    if purpose != 'baseline' and phase == 'train':  # fixmatch in train
                         outputs_ulb = model(inputs_ulb)
                         pseudo_label = torch.softmax(outputs_ulb, dim=-1)
                         probs_ulb, preds_ulb = torch.max(pseudo_label, 1)
@@ -100,32 +94,31 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
                         outputs_ulb_wa = model(inputs_ulb_wa)
                         loss_ulb = (F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none') * mask).mean()
                         mask_ratio.append(mask.mean().item())
-                        loss = loss_lb + loss_ulb * lambda_u
+                        loss_lb = loss
+                        loss += loss_ulb * lambda_u
 
                     # backward + optimize only if in training phase
                     if phase == 'train':
                         loss.backward()
                         optimizer.step()
-                        
+
                 # Calculate loss and metrics per the batch
                 if purpose == 'baseline' or phase == 'test':
-                    running_loss += loss.item() * inputs.size(0)
-                else: # FixMatch
+                    running_loss += loss.item() * inputs_lb.size(0)
+                else:  # FixMatch
                     running_loss += loss_lb.item() * inputs_lb.size(0) \
-                                 + loss_ulb * lambda_u * inputs_ulb.size(0)
-                    
-                if phase == 'train' and purpose == 'fixmatch':
-                    preds, labels = preds_lb, labels_lb
+                                    + loss_ulb * lambda_u * inputs_ulb.size(0)
+
                 running_corrects += torch.sum(preds == labels.data)
                 batch_metrics = update_batch_metrics(batch_metrics, preds, labels)
-                
+
             if phase == 'train':
                 scheduler.step()
-            
+
             # Calcluate the metrics (e.g. Accuracy) per the epoch
             phase_for_epoch_metrics = phase
-            if phase == 'train' and purpose == 'fixmatch':
-                phase_for_epoch_metrics = 'train_lb'
+            # if phase == 'train' and purpose == 'fixmatch':
+            #     phase_for_epoch_metrics = 'train_lb'
             epoch_metrics = get_epoch_metrics(running_loss, dataset_sizes, phase_for_epoch_metrics,
                                               running_corrects, batch_metrics, metric_types)
             print_metrics(epoch_metrics, cls_names, phase=phase, mask_ratio=mask_ratio)
@@ -145,7 +138,7 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
         else:
             for img_cls in cls_names:
                 metrics[metric_type][img_cls] = epoch_metrics[metric_type][img_cls]
-            
+
     print_metrics(metrics, cls_names, phase='Best results')
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))

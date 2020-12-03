@@ -5,142 +5,226 @@ import shutil
 import glob
 import os
 import random
-
+from datasets.transforms import get_data_transforms
 from torchvision import datasets
 from matplotlib import pyplot as plt
+from PIL import Image
 
-def separate_datasets(data_dir, fold, labeled_num_per_cls, mu):
-    '''Separate train datasets into labeled and unlabeled datasets.
-    
-    Args:
-        data_dir (str): the base directory path for the datasets
-        fold (int): the number of models which will be trained and tested
-        labeled_num_per_cls (int): the number of labeled data in each class
-        mu (int): the rate of unlabeled data to labeled data (e.g. labeled:unlabeled = 1:4 -> mu = 4)
-        
-    Returns:
-        nothing
+def separate_datasets(data_dir, fold, labeled_num_per_cls, mu,outpath = './data/CXR'):
     '''
-    # Remove and create directories
+    Split the dataset randomly by 'fold' parameter.
+    Args:
+        data_dir: Root path of dataset. ex) ./data/CXR or ./data/CT
+        fold: Number of times to split data
+        labeled_num_per_cls, mu: Number of labeled image per class. Number of unlabeld image will be labeled_num_per_cls * mu per class.
+        outpath: Root path where the text file(train_lb_%.txt, train_ulb_%.txt) will be saved
+    '''
+
+    class_name = ['covid-19','pneumonia','normal']
+
+    if not os.path.exists(outpath):
+        os.makedirs(outpath)
+
+    image_paths = [glob.glob(os.path.join(data_dir,'train',cls_name,'*')) for cls_name in class_name]
     for n in range(fold):
-        if os.path.isdir(f'{data_dir}/train_lb/train_lb_{n}'):
-            shutil.rmtree(f'{data_dir}/train_lb/train_lb_{n}')
-        os.makedirs(f'{data_dir}/train_lb/train_lb_{n}/covid-19')
-        os.makedirs(f'{data_dir}/train_lb/train_lb_{n}/pneumonia')
-        os.makedirs(f'{data_dir}/train_lb/train_lb_{n}/normal')
+        images = [np.random.choice(im_path,labeled_num_per_cls+labeled_num_per_cls*mu,replace=False) for im_path in image_paths]
+        file_name = os.path.join(outpath , f'train_lb_{n}.txt')
+        with open(file_name, 'w') as f:
+            for i in range(labeled_num_per_cls):
+                for j,cls_name in enumerate(class_name):
+                    f.writelines(images[j][i] + " " + cls_name+ "\n")
+        print('"train_lb_{}.txt" created in {}'.format(n,outpath))
+        file_name = os.path.join(outpath, f'train_ulb_{n}.txt')
+        with open(file_name, 'w') as f:
+            for i in range(labeled_num_per_cls,labeled_num_per_cls*(mu+1)):
+                for j, cls_name in enumerate(class_name):
+                    f.writelines(images[j][i] + "\n")
+        print('"train_ulb_{}.txt" created in {}'.format(n, outpath))
+    return True
 
-        if os.path.isdir(f'{data_dir}/train_ulb/train_ulb_{n}'):
-            shutil.rmtree(f'{data_dir}/train_ulb/train_ulb_{n}')
-        os.makedirs(f'{data_dir}/train_ulb/train_ulb_{n}/covid-19')
-        os.makedirs(f'{data_dir}/train_ulb/train_ulb_{n}/pneumonia')
-        os.makedirs(f'{data_dir}/train_ulb/train_ulb_{n}/normal')
-
-        if os.path.isdir(f'{data_dir}/train_ulb/train_ulb_wa_{n}'):
-            shutil.rmtree(f'{data_dir}/train_ulb/train_ulb_wa_{n}')
-        os.makedirs(f'{data_dir}/train_ulb/train_ulb_wa_{n}/covid-19')
-        os.makedirs(f'{data_dir}/train_ulb/train_ulb_wa_{n}/pneumonia')
-        os.makedirs(f'{data_dir}/train_ulb/train_ulb_wa_{n}/normal')
-        
-    # Copy train datasets into labeled and unlabeled directories
-    for n in range(fold):
-        for img_cls in ('covid-19', 'pneumonia', 'normal'):
-            images = glob.glob(f'{data_dir}/train/{img_cls}/*')
-
-            # For labeled data
-            samples_lb = set(random.sample(images, labeled_num_per_cls))
-            for s_img in samples_lb:
-                dst_img = s_img.replace('/train/', f'/train_lb/train_lb_{n}/')
-                shutil.copyfile(s_img, dst_img)
-
-            # For unlabeled data
-            samples_ulb = random.sample(list(filter(lambda ele: ele not in samples_lb, images)), labeled_num_per_cls*mu)
-            for s_img in samples_ulb:
-                dst_img1 = s_img.replace('/train/', f'/train_ulb/train_ulb_{n}/')
-                dst_img2 = s_img.replace('/train/', f'/train_ulb/train_ulb_wa_{n}/')
-                shutil.copyfile(s_img, dst_img1)
-                shutil.copyfile(s_img, dst_img2)
-
-def get_data_loaders(data_transforms, fold, batch_size, dataset_types, data_dir, lb_partial_dir, purpose='baseline', mu=None):
-    '''Create and return data loaders applied transformations, the batch size and so on.
-    
-    Args:
-        data_transforms (dict): transformation methods for train, validation and test
-        fold (int): the number of models which will be trained and tested
-        batch_size (int): the batch size
-        dataset_types (list): dataset types for train and test (e.g. ['train', 'test'] or ['train', 'val', 'test])
-        data_dir (str): the base directory path for the datasets
-        lb_partial_dir (str): the partial directory path according to datase types or mu
-        purpose (str): the purpose of the model
-        mu (int): the rate of unlabeled data to labeled data (e.g. labeled:unlabeled = 1:4 -> mu = 4)
-        
-    Returns:
-        data_loaders (list): data loaders applied transformations, the batch size and so on
-        dataset_sizes (dict): sizes of train and test datasets
-        class_names (list): class names for the dataset
+def make_baseline_dataset(data_dir,labeled_num_per_cls,outpath = './data/CXR'):
     '''
-    f_name = {'train_lb': 'train_lb', 'train_ulb': 'train_ulb', 'train_ulb_wa': 'train_ulb'} # just for fixmatch
-    data_loaders = []
-    for i in range(fold):
-        if purpose == 'baseline':
-            image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x if x != 'train'
-                                                                               else f'{lb_partial_dir}{i}'),
-                                                      data_transforms[x])
-                              for x in dataset_types}
-            data_loaders.append({x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size,
-                                                                shuffle=True, num_workers=4)
-                                for x in dataset_types})
-        else: # FixMatch
-            image_datasets = {x if 'train' not in x else x[:-2]: datasets.ImageFolder(os.path.join(data_dir,
-                                                                                                   x if 'train' not in x
-                                                                                                   else f'{f_name[x[:-2]]}/{x}/'),
-                                                                 data_transforms[x if 'train' not in x else x[:-2]])
-                              for x in [f'train_lb_{i}', f'train_ulb_{i}', f'train_ulb_wa_{i}', 'test']}
-
-            # train_lb, test case (apply shuffle)
-            data_loaders.append({x: torch.utils.data.DataLoader(image_datasets[x],
-                                                                batch_size=batch_size,
-                                                                shuffle=True, num_workers=4)
-                                 for x in ['train_lb', 'test']})
-            # train_ulb, train_ulb_wa case (not apply shuffle) - because of consistency loss
-            data_loaders.append({x: torch.utils.data.DataLoader(image_datasets[x],
-                                                                batch_size=batch_size*mu,
-                                                                num_workers=4)
-                                 for x in ['train_ulb', 'train_ulb_wa']})
-            
-    if purpose == 'baseline':
-        dataset_sizes = {x: len(image_datasets[x]) for x in dataset_types}
-        class_names = image_datasets['train'].classes
-    else: # FixMatch
-        dataset_sizes = {x: len(image_datasets[x]) for x in ['train_lb', 'train_ulb', 'train_ulb_wa', 'test']}
-        class_names = image_datasets['train_lb'].classes
-    
-    return data_loaders, dataset_sizes, class_names
-
-def show_samples(data_loaders, class_names, dataset_type='train'):
-    '''Get a batch of training data and make a grid from batch
-    
+    Make baseline dataset text file
     Args:
-        data_loaders (list): data loaders applied transformations, the batch size and so on
-        class_names (list): class names for the dataset
-        dataset_type (str): the dataset type which show samples
-        
-    Returns:
-        nothing
+        data_dir: Root path of dataset. ex) ./data/CXR or ./data/CT
+        labeled_num_per_cls: Number of image per class. It is only used for train dataset
+        outpath: Root path where the text file(train.txt, test.txt) will be saved
     '''
-    
-    # Extract 4 samples from first data loader
-    inputs, classes = next(iter(data_loaders[0][dataset_type]))
-    inputs, classes = inputs[:4], classes[:4]
+
+    class_name = ['covid-19', 'pneumonia', 'normal']
+
+    if not os.path.exists(outpath):
+        os.makedirs(outpath)
+
+    images = [glob.glob(os.path.join(data_dir,'train',cls_name,'*')) for cls_name in class_name]
+    images = [np.random.choice(im_path, labeled_num_per_cls , replace=False) for
+              im_path in images]
+
+    with open(os.path.join(outpath, 'train.txt'), 'w') as f:
+        for i in range(labeled_num_per_cls):
+            for j, cls_name in enumerate(class_name):
+                f.writelines(images[j][i] + " " + cls_name+ "\n")
+    print('"train.txt" created in {}'.format(outpath))
+    images = [glob.glob(os.path.join(data_dir, 'test', cls_name, '*')) for cls_name in class_name]
+
+    with open(os.path.join(outpath, 'test.txt'), 'w') as f:
+        for j, cls_name in enumerate(class_name):
+            for i in range(len(images[j])):
+                f.writelines(images[j][i] + " " + cls_name + "\n")
+    print('"test.txt" created in {}'.format(outpath))
+    return True
+
+class CovidDataLoader(torch.utils.data.Dataset):
+    '''
+    Custom data loader for covid data.
+    Return:
+        new_batch['img_lb'] = [b,224,224,3]
+        new_batch['label'] = [b]
+        new_batch['img_ulb'] = [b*mu,224,224,3] (Return only when purpose is not baseline)
+        new_batch['img_ulb_wa'] = [b*mu,224,224,3] (Return only when purpose is not baseline)
+    '''
+    def __init__(self,dataset_types,cfg,fold_id=None):
+        '''
+        Args:
+            dataset_types: It distinguishes whether it is a train or a test through the corresponding parameter.
+            cfg: The cfg parameter must have purpose, data dir information and mu (Used only when purpose is not baseline).
+            fold_id: It is used when the purpose is fixmatch and means fold number.
+                    This information is used to read the appropriate txt file.
+        '''
+        self.type= dataset_types
+        self.cfg = cfg
+        self.class_names = {0:'Covid-19',1:'Pneumonia',2:'Normal'}
+        self.name2label = {'covid-19':0,'pneumonia':1,'normal':2}
+        self.transformer = get_data_transforms(cfg['purpose'])
+        if 'train' not in dataset_types:
+            self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'],'{}.txt'.format(dataset_types)))
+            return
+        elif cfg['purpose'] =='baseline':
+            self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'],'train.txt'))
+        else:
+            assert fold_id!=None,'No fold_id was received.'
+            self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'] , f'train_lb_{fold_id}.txt'))
+            self.image_ulb_paths = self.load_text(os.path.join(cfg['data_dir'] , f'train_ulb_{fold_id}.txt'),is_labeld=False)
+
+    def load_text(self,txt_path,is_labeld=True):
+        f = open(txt_path,'r')
+        if is_labeld:
+            paths,labels = [],[]
+            for l in f.readlines():
+                path,label = l.strip('\n').split()
+                paths.append(path)
+                labels.append(self.name2label[label])
+            f.close()
+            return paths,labels
+        else:
+            lines = f.readlines()
+            f.close()
+            return [l.strip('\n') for l in lines]
+
+    def load_image(self,path):
+        img = Image.open(path)
+        if img.mode !='RGB':
+            return img.convert('RGB')
+        return img
+
+    def __len__(self):
+        return len(self.image_lb_paths)
+
+    def __getitem__(self, idx):
+        img_lb = self.load_image(self.image_lb_paths[idx])
+        label = torch.LongTensor([self.labels[idx]])
+
+        if self.cfg['purpose']=='baseline' or 'train' not in self.type: # for baseline, test
+            img_lb = self.transformer['{}'.format(self.type)](img_lb)
+            return {'img_lb':img_lb,'label': label}
+        else:
+            img_lb = self.transformer['{}'.format('train_lb')](img_lb) # for fixmatch
+
+            img_unlabel = [self.load_image(self.image_ulb_paths[i]) for i in range(idx*self.cfg['mu'],(idx+1)*self.cfg['mu'])]
+            img_ulb = torch.cat([self.transformer['train_ulb'](img_u).unsqueeze(0) for img_u in img_unlabel.copy()],0)
+            img_ulb_wa =torch.cat([self.transformer['train_ulb_wa'](img_u).unsqueeze(0) for img_u in img_unlabel.copy()],0)
+            return {'img_lb': img_lb, 'label': label,'img_ulb':img_ulb,'img_ulb_wa':img_ulb_wa}
+
+    @staticmethod
+    def collate_fn(batch):
+        if 'img_ulb' in batch[0].keys(): # for fixmatch
+            new_batch = {'img_lb' : torch.stack([b['img_lb'] for b in batch],0),
+                         'label' : torch.cat([b['label'] for b in batch],0),
+                         'img_ulb' : torch.cat([b['img_ulb'] for b in batch],0),
+                         'img_ulb_wa' : torch.cat([b['img_ulb_wa'] for b in batch],0),}
+        else: # for baseline, test
+            new_batch = {'img_lb': torch.stack([b['img_lb'] for b in batch], 0),
+                         'label': torch.cat([b['label'] for b in batch], 0)}
+        return new_batch
+
+
+def preprocess(class_names,inputs, classes=None, mu=4):
+    '''
+    Args:
+        class_names: Recommend {0:'Covid-19',1:'Pneumonia',2:'Normal'}
+        inputs: Data of image
+        classes: Data of label
+        mu:
+
+    Returns:
+        inp : Preprocessed image (0.0~1.0)
+        title : Label data in string format
+    '''
+    inputs = inputs[:mu]
     inp = torchvision.utils.make_grid(inputs)
-    title = [class_names[x] for x in classes]
-    
+
+    if classes is not None:
+        classes = classes[:mu]
+        title = [class_names[x] for x in classes.numpy()]
+    else:
+        title = None
+
     # Plot the samples
     inp = inp.numpy().transpose((1, 2, 0))
     mean = np.array([0.485, 0.456, 0.406])
     std = np.array([0.229, 0.224, 0.225])
     inp = std * inp + mean
     inp = np.clip(inp, 0, 1)
-    plt.imshow(inp)
-    if title is not None:
-        plt.title(title)
-    plt.pause(0.001)  # pause a bit so that plots are updated
+    return inp, title
+
+
+def show_samples(data_loader, class_names, iter_num=1, mu=4):
+    '''
+    This function is used to check if the data loader properly loaded the image.
+    Args:
+        data_loader: CovidDataLoader class
+        class_names: Recommend {0:'Covid-19',1:'Pneumonia',2:'Normal'}
+        iter_num: This parameter is for how many iterations to check based on batch size 1.
+        mu: If the data loader has 2 key values, it is not used.
+    Returns:
+
+    '''
+    for i, batch in enumerate(data_loader):
+        img, labels = preprocess(class_names,batch['img_lb'], batch['label'],mu=mu)
+
+        if len(batch.keys()) != 2:
+            fig, axes = plt.subplots(nrows=1, ncols=3)
+            fig.set_figheight(13)
+            fig.set_figwidth(13)
+            axes[0].set_title(labels)
+            axes[0].imshow(img)
+
+            im_ulb, _ = preprocess(class_names,batch['img_ulb'],mu=mu)
+            axes[1].set_title('ulb')
+            axes[1].imshow(im_ulb)
+
+            im_ulb_wa, _ = preprocess(class_names,batch['img_ulb_wa'],mu=mu)
+            axes[2].set_title('ulb_wa')
+            axes[2].imshow(im_ulb_wa)
+            fig.tight_layout()
+
+            plt.show()
+
+        else:
+            plt.imshow(img)
+            plt.xlabel(labels)
+            plt.show()
+        if i == iter_num - 1:
+            break
+
+    return
