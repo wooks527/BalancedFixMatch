@@ -84,13 +84,13 @@ def make_baseline_dataset(data_dir,labeled_num_per_cls=None,outpath = './data/CX
 
         if dataset_type=='train' and labeled_num_per_cls != None: # In the case of train, randomly extracted as much as labeled_num_per_cls.
             image_paths = [np.random.choice(im_path, labeled_num_per_cls , replace=False) for im_path in image_paths]
-        elif dataset_types=='train':
+        elif dataset_type=='train':
             print('The dataset is created over the entire data.')
-
+            
         with open(os.path.join(outpath, '{}.txt'.format(dataset_type)), 'w') as f: # Make txt file.
-            for i in range(labeled_num_per_cls):
-                for j, cls_name in enumerate(class_name):
-                    f.writelines(image_paths[j][i] + " " + cls_name+ "\n")
+            for i, cls_name in enumerate(class_name):
+                for im_path in image_paths[i]:
+                    f.writelines(im_path + " " + cls_name+ "\n")
         print('"{}.txt" created in {}'.format(dataset_type,outpath))
     return True
 
