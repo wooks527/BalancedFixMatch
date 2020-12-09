@@ -27,7 +27,7 @@ def separate_datasets(data_dir, fold, labeled_num_per_cls, mu,outpath = './data/
         os.makedirs(outpath)
 
     image_paths = [glob.glob(os.path.join(data_dir,'train',cls_name,'*')) for cls_name in class_name]
-    inlabeled_image_num = labeled_num_per_cls * mu * len(image_paths)
+    unlabeled_image_num = labeled_num_per_cls * mu * len(image_paths)
 
     for i, cls_name in enumerate(class_name):  # Check folder.
         assert len(image_paths[i]), '{} does not have a {} folder'.format(os.path.join(data_dir, 'train'),cls_name)
@@ -46,7 +46,7 @@ def separate_datasets(data_dir, fold, labeled_num_per_cls, mu,outpath = './data/
                     all_image_paths.remove(labeled_image_paths[j][i]) # Delete to avoid duplication.
         print('"train_lb_{}.txt" created in {}'.format(n,outpath))
 
-        unlabeled_image_paths = np.random.choice(all_image_paths,inlabeled_image_num,replace=False)
+        unlabeled_image_paths = np.random.choice(all_image_paths,unlabeled_image_num,replace=False)
         file_name = os.path.join(outpath, f'train_ulb_{n}.txt')
         with open(file_name, 'w') as f:
             for unlabeled_image in unlabeled_image_paths:
