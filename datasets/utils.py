@@ -27,7 +27,7 @@ def separate_datasets(data_dir, fold, labeled_num_per_cls, mu,outpath = './data/
         os.makedirs(outpath)
 
     image_paths = [glob.glob(os.path.join(data_dir,'train',cls_name,'*')) for cls_name in class_name]
-    unlabeled_image_num = labeled_num_per_cls * mu * len(image_paths)
+    unlabeled_image_num = labeled_num_per_cls * len(class_name) * mu # unlabeled_num = labeled_num * mu = labeled_num_per_cls * len(class_name) * mu
 
     for i, cls_name in enumerate(class_name):  # Check folder.
         assert len(image_paths[i]), '{} does not have a {} folder'.format(os.path.join(data_dir, 'train'),cls_name)
@@ -86,7 +86,7 @@ def make_baseline_dataset(data_dir,labeled_num_per_cls=None,outpath = './data/CX
             image_paths = [np.random.choice(im_path, labeled_num_per_cls , replace=False) for im_path in image_paths]
         elif dataset_type=='train':
             print('The dataset is created over the entire data.')
-            
+
         with open(os.path.join(outpath, '{}.txt'.format(dataset_type)), 'w') as f: # Make txt file.
             for i, cls_name in enumerate(class_name):
                 for im_path in image_paths[i]:
