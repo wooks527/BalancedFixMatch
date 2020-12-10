@@ -1,7 +1,11 @@
-AVIDNet-Augmentation_test
+AVIDNet-Util_Dev
 ========
 
 AVIDNet is the model to classify COVID-19 based on Chest X-ray or CT images.
+
+## Detail of change
+
+[Link](https://www.notion.so/Util-363be4a8343347f282ea410b52a94cec)
 
 ## Requirements
 

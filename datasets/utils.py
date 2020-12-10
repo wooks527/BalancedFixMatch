@@ -10,7 +10,7 @@ from torchvision import datasets
 from matplotlib import pyplot as plt
 from PIL import Image
 
-def separate_datasets(data_dir, fold, labeled_num_per_cls, mu,outpath = './data/CXR'):
+def separate_datasets(data_dir, fold, labeled_num_per_cls, mu,outpath = './data/CXR',class_name=None):
     '''
     Split the dataset randomly by 'fold' parameter.
     Args:
@@ -20,58 +20,78 @@ def separate_datasets(data_dir, fold, labeled_num_per_cls, mu,outpath = './data/
         outpath: Root path where the text file(train_lb_%.txt, train_ulb_%.txt) will be saved
     '''
 
-    class_name = ['covid-19','pneumonia','normal']
+    if class_name == None:
+        class_name = ['covid-19', 'pneumonia', 'normal']
 
     if not os.path.exists(outpath):
         os.makedirs(outpath)
 
     image_paths = [glob.glob(os.path.join(data_dir,'train',cls_name,'*')) for cls_name in class_name]
-    for n in range(fold):
-        images = [np.random.choice(im_path,labeled_num_per_cls+labeled_num_per_cls*mu,replace=False) for im_path in image_paths]
+    unlabeled_image_num = labeled_num_per_cls * len(class_name) * mu # unlabeled_num = labeled_num * mu = labeled_num_per_cls * len(class_name) * mu
+
+    for i, cls_name in enumerate(class_name):  # Check folder.
+        assert len(image_paths[i]), '{} does not have a {} folder'.format(os.path.join(data_dir, 'train'),cls_name)
+
+    for n in range(fold): # Make txt file.
+        all_image_paths, labeled_image_paths = [], []
+        for im_path in image_paths:
+            all_image_paths += im_path
+            labeled_image_paths.append(np.random.choice(im_path,labeled_num_per_cls,replace=False)) # Random choice image per class.
+
         file_name = os.path.join(outpath , f'train_lb_{n}.txt')
         with open(file_name, 'w') as f:
             for i in range(labeled_num_per_cls):
                 for j,cls_name in enumerate(class_name):
-                    f.writelines(images[j][i] + " " + cls_name+ "\n")
+                    f.writelines(labeled_image_paths[j][i] + " " + cls_name+ "\n")
+                    all_image_paths.remove(labeled_image_paths[j][i]) # Delete to avoid duplication.
         print('"train_lb_{}.txt" created in {}'.format(n,outpath))
+
+        unlabeled_image_paths = np.random.choice(all_image_paths,unlabeled_image_num,replace=False)
         file_name = os.path.join(outpath, f'train_ulb_{n}.txt')
         with open(file_name, 'w') as f:
-            for i in range(labeled_num_per_cls,labeled_num_per_cls*(mu+1)):
-                for j, cls_name in enumerate(class_name):
-                    f.writelines(images[j][i] + "\n")
+            for unlabeled_image in unlabeled_image_paths:
+                f.writelines(unlabeled_image + "\n")
         print('"train_ulb_{}.txt" created in {}'.format(n, outpath))
     return True
 
-def make_baseline_dataset(data_dir,labeled_num_per_cls,outpath = './data/CXR'):
+def make_baseline_dataset(data_dir,labeled_num_per_cls=None,outpath = './data/CXR', dataset_types = None, class_name = None):
     '''
     Make baseline dataset text file
     Args:
         data_dir: Root path of dataset. ex) ./data/CXR or ./data/CT
         labeled_num_per_cls: Number of image per class. It is only used for train dataset
-        outpath: Root path where the text file(train.txt, test.txt) will be saved
+                            if None, The dataset is created over the entire data.
+        outpath: Root path where the text file(train.txt, test.txt) will be saved.
+                The file name will be dataset_type.txt .
+        dataset_types: Type of dataset. ex) ['train', 'test', 'val']
+        class_name : It means the subfolder name created with class name. ex)['covid-19', 'pneumonia', 'normal']
     '''
 
-    class_name = ['covid-19', 'pneumonia', 'normal']
+    if dataset_types == None:
+        dataset_types = ['train', 'test']
+
+    if class_name == None:
+        class_name = ['covid-19', 'pneumonia', 'normal']
 
     if not os.path.exists(outpath):
         os.makedirs(outpath)
 
-    images = [glob.glob(os.path.join(data_dir,'train',cls_name,'*')) for cls_name in class_name]
-    images = [np.random.choice(im_path, labeled_num_per_cls , replace=False) for
-              im_path in images]
+    for dataset_type in dataset_types:
+        image_paths = [glob.glob(os.path.join(data_dir,dataset_type,cls_name,'*')) for cls_name in class_name]
 
-    with open(os.path.join(outpath, 'train.txt'), 'w') as f:
-        for i in range(labeled_num_per_cls):
-            for j, cls_name in enumerate(class_name):
-                f.writelines(images[j][i] + " " + cls_name+ "\n")
-    print('"train.txt" created in {}'.format(outpath))
-    images = [glob.glob(os.path.join(data_dir, 'test', cls_name, '*')) for cls_name in class_name]
+        for i, cls_name in enumerate(class_name): # Check folder.
+            assert len(image_paths[i]),'{} does not have a {} folder'.format(os.path.join(data_dir,dataset_type),cls_name)
 
-    with open(os.path.join(outpath, 'test.txt'), 'w') as f:
-        for j, cls_name in enumerate(class_name):
-            for i in range(len(images[j])):
-                f.writelines(images[j][i] + " " + cls_name + "\n")
-    print('"test.txt" created in {}'.format(outpath))
+        if dataset_type=='train' and labeled_num_per_cls != None: # In the case of train, randomly extracted as much as labeled_num_per_cls.
+            image_paths = [np.random.choice(im_path, labeled_num_per_cls , replace=False) for im_path in image_paths]
+        elif dataset_type=='train':
+            print('The dataset is created over the entire data.')
+
+        with open(os.path.join(outpath, '{}.txt'.format(dataset_type)), 'w') as f: # Make txt file.
+            for i, cls_name in enumerate(class_name):
+                for im_path in image_paths[i]:
+                    f.writelines(im_path + " " + cls_name+ "\n")
+        print('"{}.txt" created in {}'.format(dataset_type,outpath))
     return True
 
 class CovidDataLoader(torch.utils.data.Dataset):
@@ -96,7 +116,7 @@ class CovidDataLoader(torch.utils.data.Dataset):
         self.class_names = {0:'Covid-19',1:'Pneumonia',2:'Normal'}
         self.name2label = {'covid-19':0,'pneumonia':1,'normal':2}
         self.transformer = get_data_transforms(cfg['purpose'])
-        if 'train' not in dataset_types:
+        if 'train' != dataset_types:
             self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'],'{}.txt'.format(dataset_types)))
             return
         elif cfg['purpose'] =='baseline':
@@ -134,7 +154,7 @@ class CovidDataLoader(torch.utils.data.Dataset):
         img_lb = self.load_image(self.image_lb_paths[idx])
         label = torch.LongTensor([self.labels[idx]])
 
-        if self.cfg['purpose']=='baseline' or 'train' not in self.type: # for baseline, test
+        if self.cfg['purpose']=='baseline' or 'train' != self.type: # for baseline, test
             img_lb = self.transformer['{}'.format(self.type)](img_lb)
             return {'img_lb':img_lb,'label': label}
         else:
