@@ -2,8 +2,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
 from torchvision import models
+from models.cosine_annearing_with_warmup import CosineAnnealingWarmUpRestarts
+# cosine_annearing_with_warmup is referenced by below github repository.
+# https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup
 
-def get_model(device, fine_tuning=True):
+def get_model(device, fine_tuning=True, scheduler='cos', step_size=7):
     '''Create and return the model based on ResNet-50.
     
     Args:
@@ -29,6 +32,10 @@ def get_model(device, fine_tuning=True):
     # Set loss function, optimizer and learning scheduler
     criterion = nn.CrossEntropyLoss()
     optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+    exp_lr_scheduler = CosineAnnealingWarmUpRestarts(optimizer_ft,
+                                                     T_0=5, T_mult=1,
+                                                     eta_max=0.1, T_up=10)
+    if scheduler == 'step':
+        exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=step_size, gamma=0.1)
     
     return model_ft, criterion, optimizer_ft, exp_lr_scheduler
