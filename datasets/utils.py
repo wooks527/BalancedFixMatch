@@ -113,7 +113,7 @@ class CovidDataLoader(torch.utils.data.Dataset):
         '''
         self.type= dataset_types
         self.cfg = cfg
-        self.class_names = {0:'Covid-19',1:'Pneumonia',2:'Normal'}
+        self.class_names = {0:'covid-19',1:'pneumonia',2:'normal'}
         self.name2label = {'covid-19':0,'pneumonia':1,'normal':2}
         self.transformer = get_data_transforms(cfg['purpose'])
         if 'train' != dataset_types:

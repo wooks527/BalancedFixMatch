@@ -9,9 +9,9 @@ from collections import defaultdict
 from models.metrics import update_batch_metrics, get_epoch_metrics, print_metrics
 
 
-def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_types, dataset_types,
-                data_loaders, dataset_sizes, device, num_epochs=25, batch_size=4, patience=5,
-                lambda_u=1.0, threshold=0.95, purpose='baseline', is_early=True):
+def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_targets, metric_types,
+                dataset_types, data_loaders, dataset_sizes, device, num_epochs=25, batch_size=4,
+                patience=5, lambda_u=1.0, threshold=0.95, purpose='baseline', is_early=True):
     '''Train the model.
 
     Args:
@@ -20,8 +20,9 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
         optimizer (obj): the optimizer (e.g. Adam)
         scheduler (obj): the learning scheduler (e.g. Step decay)
         i (int): the number indicating which model it is
-        cls_names (list): class names to calculate performance metrics of the model including "All"
-                          (e.g. ['All', 'COVID-19', 'Pneumonia', 'Normal'])
+        class_names (dict): class names for images (e.g. {0: 'covid-19', 1: 'pneumonia', 2: 'normal'})
+        metric_targets (list): metric targets to calculate performance metrics of the model
+                               (e.g. ['all', 'covid-19', 'pneumonia', 'normal'])
         metric_types (list): the performance metrics of the model (e.g. Accuracy, F1-Score and so on)
         dataset_types (list): dataset types for train and test (e.g. ['train', 'test'] or ['train', 'val', 'test])
         data_loaders (list): data loaders applied transformations, the batch size and so on
@@ -36,13 +37,14 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
 
     Returns:
         model (obj): the model which was trained
-        metrics (dict): the results of the performance metrics after training the model
+        best_metrics (dict): the results of the best performance metrics after training the model
     '''
 
     since = time.time()
     if is_early:
         early_stopping = EarlyStopping(patience=patience, verbose=True)
-    metrics = {m_type: defaultdict(float) for m_type in metric_types}
+    best_metrics = {m_type: defaultdict(float) for m_type in metric_types}
+    epoch_metrics_list = []
 
     print(f'{"-" * 20}\nModel {i + 1}\n{"-" * 20}\n')
     for epoch in range(num_epochs):
@@ -56,18 +58,14 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
             else:
                 model.eval()  # Set model to evaluate mode
 
-            running_loss = 0.0
-            running_corrects = 0
+            epoch_loss = 0.0
             batch_metrics = {'tp': defaultdict(int), 'size': defaultdict(int),
                              'fp': defaultdict(int), 'fn': defaultdict(int)}
             mask_ratio = []  # just for fixmatch
 
-            phase_for_data_loader = phase
-            # if purpose == 'fixmatch' and phase == 'train':
-            #     phase_for_data_loader = 'train_lb'
-
             # Iterate over data.
-            for batch in data_loaders[phase_for_data_loader]:
+            for batch in data_loaders[phase]:
+                # Load batches
                 inputs_lb, labels = batch['img_lb'], batch['label']
                 inputs_lb = inputs_lb.to(device)
                 labels = labels.to(device)
@@ -79,22 +77,23 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
-                # forward
-                # track history if only in train
+                # Forward the model
                 with torch.set_grad_enabled(phase == 'train'):
+                    # Calculate labeled loss
                     outputs = model(inputs_lb)
                     _, preds = torch.max(outputs, 1)
-                    loss = criterion(outputs, labels)
-                    if purpose != 'baseline' and phase == 'train':  # fixmatch in train
+                    loss = loss_lb = criterion(outputs, labels)
+                    
+                    # Calculate unlabeled loss for FixMatch
+                    if purpose != 'baseline' and phase == 'train':
                         outputs_ulb = model(inputs_ulb)
-                        pseudo_label = torch.softmax(outputs_ulb, dim=-1)
-                        probs_ulb, preds_ulb = torch.max(pseudo_label, 1)
+                        probs_ulb = torch.softmax(outputs_ulb, dim=-1)
+                        probs_ulb, preds_ulb = torch.max(probs_ulb, 1)
                         mask = probs_ulb.ge(threshold).float()
 
                         outputs_ulb_wa = model(inputs_ulb_wa)
                         loss_ulb = (F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none') * mask).mean()
                         mask_ratio.append(mask.mean().item())
-                        loss_lb = loss
                         loss += loss_ulb * lambda_u
 
                     # backward + optimize only if in training phase
@@ -104,47 +103,45 @@ def train_model(model, criterion, optimizer, scheduler, i, cls_names, metric_typ
 
                 # Calculate loss and metrics per the batch
                 if purpose == 'baseline' or phase == 'test':
-                    running_loss += loss.item() * inputs_lb.size(0)
+                    epoch_loss += loss.item() * inputs_lb.size(0)
                 else:  # FixMatch
-                    running_loss += loss_lb.item() * inputs_lb.size(0) \
+                    epoch_loss += loss_lb.item() * inputs_lb.size(0) \
                                     + loss_ulb * lambda_u * inputs_ulb.size(0)
 
-                running_corrects += torch.sum(preds == labels.data)
-                batch_metrics = update_batch_metrics(batch_metrics, preds, labels)
+                batch_metrics = update_batch_metrics(batch_metrics, preds, labels, class_names)
 
             if phase == 'train':
                 scheduler.step()
 
             # Calcluate the metrics (e.g. Accuracy) per the epoch
-            phase_for_epoch_metrics = phase
-            # if phase == 'train' and purpose == 'fixmatch':
-            #     phase_for_epoch_metrics = 'train_lb'
-            epoch_metrics = get_epoch_metrics(running_loss, dataset_sizes, phase_for_epoch_metrics,
-                                              running_corrects, batch_metrics, metric_types)
-            print_metrics(epoch_metrics, cls_names, phase=phase, mask_ratio=mask_ratio)
+            epoch_metrics = get_epoch_metrics(epoch_loss, dataset_sizes, phase,
+                                              class_names, batch_metrics, metric_types)
+            epoch_metrics_list.append(epoch_metrics)
+            print_metrics(epoch_metrics, metric_targets, phase=phase, mask_ratio=mask_ratio)
 
         # Check early stopping
         if phase == 'test' and is_early:
-            early_stopping(epoch_metrics['loss']['All'], model)
+            early_stopping(epoch_metrics['loss']['all'], model)
             if early_stopping.early_stop:
                 print("Early stopping!!")
                 break
 
-    # Set best metrics based on epoch metrics
-    # This best metrics can be changed by how calculate the best metrics
+    # Set best metrics based on recent 5 epochs metrics
     for metric_type in metric_types:
         if metric_type == 'acc':
-            metrics[metric_type]['All'] = epoch_metrics[metric_type]['All']
+            best_metrics[metric_type]['all'] = np.array([em[metric_type]['all']
+                                                         for em in epoch_metrics_list[-5:]]).mean()
         else:
-            for img_cls in cls_names:
-                metrics[metric_type][img_cls] = epoch_metrics[metric_type][img_cls]
+            for metric_target in metric_targets:
+                best_metrics[metric_type][metric_target] = np.array([em[metric_type][metric_target]
+                                                               for em in epoch_metrics_list[-5:]]).mean()
 
-    print_metrics(metrics, cls_names, phase='Best results')
+    print_metrics(best_metrics, metric_targets, phase='Best results')
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     print('-' * 20, '\n')
 
-    return model, metrics
+    return model, best_metrics
 
 
 class EarlyStopping:
