@@ -6,8 +6,9 @@ import numpy as np
 import torch
 
 from collections import defaultdict
-from models.metrics import update_batch_metrics, get_epoch_metrics, print_metrics
-
+from datasets.utils import get_data_loaders
+from models.model import get_model
+from models.metrics import update_batch_metrics, get_epoch_metrics, update_mean_metrics, print_metrics
 
 def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_targets, metric_types,
                 dataset_types, data_loaders, dataset_sizes, device, num_epochs=25, batch_size=4,
@@ -142,6 +143,38 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
     print('-' * 20, '\n')
 
     return model, best_metrics
+
+def train_models(cfg):
+    '''Train models for fold times.
+    
+    Args:
+        cfg (dict): The cfg parameter must have purpose, data dir information and mu
+                    (Used only when purpose is not baseline).
+    Returns:
+        trained_models (list): trained models
+    '''
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='test', cfg=cfg)
+    mean_metrics = {m_type: defaultdict(float) for m_type in cfg['metric_types']}
+    metric_targets = ['all'] + class_names
+
+    trained_models = []
+    for i in range(cfg['fold']):
+        data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='train', cfg=cfg,
+                                                                    dataset_sizes=dataset_sizes,
+                                                                    data_loaders=data_loaders, fold_id=i)
+
+        model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device, fine_tuning=True, scheduler='step')
+        model, metrics = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, i, class_names, metric_targets,
+                                     cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, num_epochs=cfg['epochs'],
+                                     lambda_u=1.0, threshold=0.95, purpose=cfg['purpose'], is_early=False)
+        trained_models.append(model)
+        mean_metrics = update_mean_metrics(metric_targets, mean_metrics, metrics, status='training')
+
+    mean_metrics = update_mean_metrics(metric_targets, mean_metrics, status='final', fold=cfg['fold'])
+    print_metrics(mean_metrics, metric_targets, phase='Mean results')
+    
+    return trained_models
 
 
 class EarlyStopping:

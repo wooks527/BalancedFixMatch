@@ -5,10 +5,10 @@ import shutil
 import glob
 import os
 import random
-from datasets.transforms import get_data_transforms
 from torchvision import datasets
 from matplotlib import pyplot as plt
-from PIL import Image
+from datasets.dataloader import CovidDataLoader
+from torch.utils.data import DataLoader
 
 def separate_datasets(data_dir, fold, labeled_num_per_cls, mu,outpath = './data/CXR',class_name=None):
     '''
@@ -94,89 +94,58 @@ def make_baseline_dataset(data_dir,labeled_num_per_cls=None,outpath = './data/CX
         print('"{}.txt" created in {}'.format(dataset_type,outpath))
     return True
 
-class CovidDataLoader(torch.utils.data.Dataset):
+def create_datasets(cfg):
+    '''Create datasets into baseline or the seperated type.
+    
+    Args:
+        cfg (dict): The cfg parameter must have purpose, data dir information and mu
+                    (Used only when purpose is not baseline).
+    Returns:
+        nothing
     '''
-    Custom data loader for covid data.
-    Return:
-        new_batch['img_lb'] = [b,224,224,3]
-        new_batch['label'] = [b]
-        new_batch['img_ulb'] = [b*mu,224,224,3] (Return only when purpose is not baseline)
-        new_batch['img_ulb_wa'] = [b*mu,224,224,3] (Return only when purpose is not baseline)
+    # Make baseline datasets
+    if not os.path.exists(os.path.join(cfg['data_dir'],'test.txt')):
+        from datasets.utils import make_baseline_dataset
+        make_baseline_dataset(cfg['data_dir'], cfg['num_labeled'],
+                              outpath=cfg['data_dir']) # test는 전부, train은 25개 만큼만
+        
+    # Make separated datasets
+    if cfg['purpose'] == 'fixmatch' \
+    and not os.path.exists(os.path.join(cfg['data_dir'],'train_lb_0.txt')):
+        from datasets.utils import separate_datasets
+        separate_datasets(cfg['data_dir'], cfg['fold'], cfg['epochs'],
+                          cfg['mu'],outpath=cfg['data_dir']) # lb는 25개, ulb는 mu*25개
+        
+def get_data_loaders(dataset_type, cfg, dataset_sizes={}, data_loaders={}, fold_id=None, overwrite=False):
+    '''Return data loaders.
+    
+    Args:
+        dataset_type (str): type of dataset. ex) 'train' or 'test'
+        cfg (dict): The cfg parameter must have purpose, data dir information and mu
+                    (Used only when purpose is not baseline).
+        dataset_sizes (dict): the number of images for each class in speicific dataset type.
+        data_loaders (dict): data loaders which are already difined
+        fold_id (int): fold index for FixMatch
+    Returns:
+        data_loaders (dict): data loaders for the dataset type
+        dataset_sizes (dict): the number of images for each class in speicific dataset type.
+        class_names (list): class names for the dataset type
     '''
-    def __init__(self,dataset_types,cfg,fold_id=None):
-        '''
-        Args:
-            dataset_types: It distinguishes whether it is a train or a test through the corresponding parameter.
-            cfg: The cfg parameter must have purpose, data dir information and mu (Used only when purpose is not baseline).
-            fold_id: It is used when the purpose is fixmatch and means fold number.
-                    This information is used to read the appropriate txt file.
-        '''
-        self.type= dataset_types
-        self.cfg = cfg
-        self.class_names = {0:'covid-19',1:'pneumonia',2:'normal'}
-        self.name2label = {'covid-19':0,'pneumonia':1,'normal':2}
-        self.transformer = get_data_transforms(cfg['purpose'])
-        if 'train' != dataset_types:
-            self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'],'{}.txt'.format(dataset_types)))
-            return
-        elif cfg['purpose'] =='baseline':
-            self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'],'train.txt'))
-        else:
-            assert fold_id!=None,'No fold_id was received.'
-            self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'] , f'train_lb_{fold_id}.txt'))
-            self.image_ulb_paths = self.load_text(os.path.join(cfg['data_dir'] , f'train_ulb_{fold_id}.txt'),is_labeld=False)
-
-    def load_text(self,txt_path,is_labeld=True):
-        f = open(txt_path,'r')
-        if is_labeld:
-            paths,labels = [],[]
-            for l in f.readlines():
-                path,label = l.strip('\n').split()
-                paths.append(path)
-                labels.append(self.name2label[label])
-            f.close()
-            return paths,labels
-        else:
-            lines = f.readlines()
-            f.close()
-            return [l.strip('\n') for l in lines]
-
-    def load_image(self,path):
-        img = Image.open(path)
-        if img.mode !='RGB':
-            return img.convert('RGB')
-        return img
-
-    def __len__(self):
-        return len(self.image_lb_paths)
-
-    def __getitem__(self, idx):
-        img_lb = self.load_image(self.image_lb_paths[idx])
-        label = torch.LongTensor([self.labels[idx]])
-
-        if self.cfg['purpose']=='baseline' or 'train' != self.type: # for baseline, test
-            img_lb = self.transformer['{}'.format(self.type)](img_lb)
-            return {'img_lb':img_lb,'label': label}
-        else:
-            img_lb = self.transformer['{}'.format('train_lb')](img_lb) # for fixmatch
-
-            img_unlabel = [self.load_image(self.image_ulb_paths[i]) for i in range(idx*self.cfg['mu'],(idx+1)*self.cfg['mu'])]
-            img_ulb = torch.cat([self.transformer['train_ulb'](img_u).unsqueeze(0) for img_u in img_unlabel.copy()],0)
-            img_ulb_wa =torch.cat([self.transformer['train_ulb_wa'](img_u).unsqueeze(0) for img_u in img_unlabel.copy()],0)
-            return {'img_lb': img_lb, 'label': label,'img_ulb':img_ulb,'img_ulb_wa':img_ulb_wa}
-
-    @staticmethod
-    def collate_fn(batch):
-        if 'img_ulb' in batch[0].keys(): # for fixmatch
-            new_batch = {'img_lb' : torch.stack([b['img_lb'] for b in batch],0),
-                         'label' : torch.cat([b['label'] for b in batch],0),
-                         'img_ulb' : torch.cat([b['img_ulb'] for b in batch],0),
-                         'img_ulb_wa' : torch.cat([b['img_ulb_wa'] for b in batch],0),}
-        else: # for baseline, test
-            new_batch = {'img_lb': torch.stack([b['img_lb'] for b in batch], 0),
-                         'label': torch.cat([b['label'] for b in batch], 0)}
-        return new_batch
-
+    # Remove fold_id for baseline
+    if cfg['purpose'] == 'baseline':
+        fold_id = None
+        
+    # Create CovidDataLoader
+    covid_data_loader = CovidDataLoader(dataset_type, cfg, fold_id=fold_id)
+    dataset_sizes[dataset_type] = len(covid_data_loader)
+    class_names = list(covid_data_loader.class_names.values())
+    
+    # Create torch DataLoader
+    data_loader = DataLoader(covid_data_loader, batch_size=cfg['batch_size'], num_workers=4, shuffle=True,
+                             collate_fn=covid_data_loader.collate_fn)
+    data_loaders[dataset_type] = data_loader
+    
+    return data_loaders, dataset_sizes, class_names
 
 def preprocess(class_names,inputs, classes=None, mu=4):
     '''
@@ -213,7 +182,7 @@ def show_samples(data_loader, class_names, iter_num=1, mu=4):
     This function is used to check if the data loader properly loaded the image.
     Args:
         data_loader: CovidDataLoader class
-        class_names: Recommend {0:'Covid-19',1:'Pneumonia',2:'Normal'}
+        class_names: Recommend {0:'covid-19', 1:'pneumonia', 2:'normal'}
         iter_num: This parameter is for how many iterations to check based on batch size 1.
         mu: If the data loader has 2 key values, it is not used.
     Returns:
@@ -222,6 +191,7 @@ def show_samples(data_loader, class_names, iter_num=1, mu=4):
     for i, batch in enumerate(data_loader):
         img, labels = preprocess(class_names,batch['img_lb'], batch['label'],mu=mu)
 
+        # Dataset which have labeled and unlabeled data concurrently
         if len(batch.keys()) != 2:
             fig, axes = plt.subplots(nrows=1, ncols=3)
             fig.set_figheight(13)
@@ -239,7 +209,8 @@ def show_samples(data_loader, class_names, iter_num=1, mu=4):
             fig.tight_layout()
 
             plt.show()
-
+            
+        # Dataset which have labeled data only
         else:
             plt.imshow(img)
             plt.xlabel(labels)

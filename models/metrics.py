@@ -14,7 +14,6 @@ def update_batch_metrics(batch_metrics, preds, labels, class_names):
         batch_metrics (dict): performance metrics for batch (e.g. Accuracy)
     '''
     for pred, label in zip(preds, labels.data):
-        batch_metrics['size'][class_names[label.item()]] += 1
         if pred == label.data:
             batch_metrics['tp'][class_names[label.item()]] += 1
         else:
