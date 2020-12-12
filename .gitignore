@@ -4,3 +4,5 @@ data/
 trained_models/
 results/
 *.pyc
+.vscode/
+__pycache__/

@@ -28,7 +28,7 @@ def create_datasets(cfg, image_data_dir=None):
     if image_data_dir == None:
         image_data_dir = cfg['data_dir']
 
-    if dataset_check(cfg) and  not cfg['overwrite']:
+    if check_dataset_txt(cfg) and  not cfg['overwrite']:
         print("Dataset is already exists.")
         return
 
@@ -56,7 +56,7 @@ def create_datasets(cfg, image_data_dir=None):
                         f.writelines(im_path + " " + cls_name+ "\n")
             print('"{}.txt" created in {}'.format(dataset_type,cfg['data_dir']))
 
-def dataset_check(cfg):
+def check_dataset_txt(cfg):
     # check val or test dataset
     for data_type in cfg['dataset_types']:
         if data_type =='train':
