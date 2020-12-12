@@ -12,7 +12,7 @@ from models.model import get_model
 from models.metrics import update_batch_metrics, get_epoch_metrics, update_mean_metrics, print_metrics
 
 def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_targets, metric_types,
-                dataset_types, data_loaders, dataset_sizes, device, print_to_file, num_epochs=25, batch_size=4,
+                dataset_types, data_loaders, dataset_sizes, device, cfg, num_epochs=25, batch_size=4,
                 patience=5, lambda_u=1.0, threshold=0.95, purpose='baseline', is_early=True):
     '''Train the model.
 
@@ -118,7 +118,7 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
             # Calcluate the metrics (e.g. Accuracy) per the epoch
             epoch_metrics = get_epoch_metrics(epoch_loss, dataset_sizes, phase,
                                               class_names, batch_metrics, metric_types)
-            print_metrics(epoch_metrics, metric_targets, print_to_file, phase=phase, mask_ratio=mask_ratio)
+            print_metrics(epoch_metrics, metric_targets, cfg, phase=phase, mask_ratio=mask_ratio)
             if phase != 'train':
                 epoch_metrics_list.append(epoch_metrics)
 
@@ -142,7 +142,7 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                                 for em in epoch_metrics_list[-5:]]).std()
             best_metrics[metric_type][metric_target] = (best_mean, best_std)
 
-    print_metrics(best_metrics, metric_targets, print_to_file, phase='Best results')
+    print_metrics(best_metrics, metric_targets, cfg, phase='Best results')
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     print('-' * 20, '\n')
@@ -179,16 +179,16 @@ def train_models(cfg):
                                                                     dataset_sizes=dataset_sizes,
                                                                     data_loaders=data_loaders, fold_id=i)
 
-        model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device, fine_tuning=True, scheduler='step')
+        model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device, fine_tuning=cfg['is_finetuning'], scheduler='step')
         model, metrics = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, i, class_names, metric_targets,
-                                     cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, cfg['print_to_file'],
+                                     cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, cfg,
                                      num_epochs=cfg['epochs'], lambda_u=1.0, threshold=0.95, purpose=cfg['purpose'], is_early=False)
         trained_models.append(model)
         mean_metrics = update_mean_metrics(metric_targets, mean_metrics, metrics, status='training')
 
     # Calculate mean metrics
     mean_metrics = update_mean_metrics(metric_targets, mean_metrics, status='final', fold=cfg['fold'])
-    print_metrics(mean_metrics, metric_targets, cfg['print_to_file'], phase='Mean results')
+    print_metrics(mean_metrics, metric_targets, cfg, phase='Mean results')
     
     return trained_models
 

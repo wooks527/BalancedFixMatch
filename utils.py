@@ -1,12 +1,14 @@
 import os
 
-def init_file_for_print():
+def init_file_for_print(cfg):
     '''Init results.txt file.'''
-    fname = f'results/results.txt'
+    if not os.path.isdir('results/'):
+            os.mkdir('results/')
+    fname = f"results/{cfg['purpose']}-nl{cfg['num_labeled']}-m{cfg['mu']}-b{cfg['batch_size']}-r{cfg['random_seed']}.txt"
     with open(fname, 'w'):
         pass
 
-def set_print_to_file(print, print_to_file):
+def set_print_to_file(print, cfg):
     '''Set print's output stream to the file.
        This codes are referenced by https://stackoverflow.com/a/27622201.
 
@@ -16,11 +18,8 @@ def set_print_to_file(print, print_to_file):
     Returns:
         nothing
     '''
-    if print_to_file:
-        if not os.path.isdir('results/'):
-            os.mkdir('results/')
-
-        fname = f'results/results.txt'
+    if cfg['print_to_file']:
+        fname = f"results/{cfg['purpose']}-nl{cfg['num_labeled']}-m{cfg['mu']}-b{cfg['batch_size']}-r{cfg['random_seed']}.txt"
         def file_print(func):
             def wrapped_func(*args,**kwargs):
                 kwargs['file'] = open(fname, 'a')

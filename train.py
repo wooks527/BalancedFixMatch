@@ -24,8 +24,8 @@ if __name__ == '__main__':
     parser.add_argument('--print_to_file', action='store_true', help='whether all prints are going to write in th file or not')
     parser.add_argument('--metric_types', type=str, nargs='+', default=['acc', 'ppv', 'recall', 'f1'], help='metric types')
     parser.add_argument('--dataset_types', type=str, nargs='+', default=['train', 'test'], help='dataset types')
+    parser.add_argument('--is_finetuning',action = 'store_true',help='whether fintunning or transfer learning')
     cfg = vars(parser.parse_args())
-
     # Set the random seed
     random_seed = cfg['random_seed']
     set_random_seed(random_seed)
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     # Set print's output stream to the file
     if cfg['print_to_file']:
         from utils import init_file_for_print
-        init_file_for_print()
+        init_file_for_print(cfg)
 
     # Create datasets
     if cfg['images_dir']==cfg['data_dir']:

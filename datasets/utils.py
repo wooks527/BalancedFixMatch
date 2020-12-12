@@ -27,8 +27,8 @@ def create_datasets(cfg, image_data_dir=None):
     '''
     if image_data_dir == None:
         image_data_dir = cfg['data_dir']
-
-    if check_dataset_txt(cfg) and  not cfg['overwrite']:
+    
+    if check_dataset_txt(cfg) and not cfg['overwrite']:
         print("Dataset is already exists.")
         return
 
@@ -68,11 +68,10 @@ def check_dataset_txt(cfg):
         for i in range(cfg['fold']):
             if not os.path.exists(os.path.join(cfg['data_dir'], f'train_lb_{i}.txt')):
                 return False
-            if cfg['purpose']!='baseline' and not os.path.exists(os.path.join(cfg['data_dir'], f'train_lb_{i}.txt')):
+            if cfg['purpose']!='baseline' and not os.path.exists(os.path.join(cfg['data_dir'], f'train_ulb_{i}.txt')):
                 return False
     elif not os.path.exists(os.path.join(cfg['data_dir'], 'train.txt')) :
         return False
-
     return True
 
 def make_train_fold(cfg,image_paths):
@@ -126,11 +125,7 @@ def get_data_loaders(dataset_type, cfg, dataset_sizes=None, data_loaders=None, f
         data_loaders (dict): data loaders for the dataset type
         dataset_sizes (dict): the number of images for each class in speicific dataset type.
         class_names (list): class names for the dataset type
-    '''
-    # Remove fold_id for baseline
-    if cfg['purpose'] == 'baseline':
-        fold_id = None
-
+    ''' 
     if dataset_sizes ==None:
         dataset_sizes={}
     if data_loaders ==None:

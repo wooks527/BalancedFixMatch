@@ -107,7 +107,7 @@ def update_mean_metrics(metric_targets, mean_metrics, metrics=None, status='trai
     return mean_metrics
     
 
-def print_metrics(epoch_metrics, metric_targets, print_to_file, phase='', mask_ratio=None):
+def print_metrics(epoch_metrics, metric_targets, cfg, phase='', mask_ratio=None):
     '''Print performance metrics.
     
     Args:
@@ -124,7 +124,7 @@ def print_metrics(epoch_metrics, metric_targets, print_to_file, phase='', mask_r
     # Set print's output stream to the file
     from utils import set_print_to_file
     global print
-    print = set_print_to_file(print, print_to_file)
+    print = set_print_to_file(print, cfg)
 
     if 'Best' in phase:
         print(f'\n{"-"*20}')

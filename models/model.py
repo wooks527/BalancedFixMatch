@@ -25,9 +25,10 @@ def get_model(device, fine_tuning=True, scheduler='cos', step_size=7):
     '''
     # Get the pre-trained model
     model_ft = models.resnet50(pretrained=True)
-    for param in model_ft.parameters():
-        param.requires_grad = fine_tuning
-        
+    if fine_tuning:
+        for param in model_ft.parameters():
+            param.requires_grad = fine_tuning
+            
     # Change fully connected layer
     num_ftrs = model_ft.fc.in_features
     model_ft.fc = nn.Linear(num_ftrs, 3)
