@@ -10,113 +10,109 @@ from matplotlib import pyplot as plt
 from datasets.dataloader import CovidDataLoader
 from torch.utils.data import DataLoader
 
-def separate_datasets(data_dir, fold, labeled_num_per_cls, mu,outpath = './data/CXR',class_name=None):
+def create_datasets(cfg, image_data_dir=None):
+    '''
+    Make dataset text file
+    Args:
+        image_data_dir
+                -   Root path of dataset. ex) ./data/CXR or ./data/CT, If None, image_data_dir is set the same as cfg['data_dir'].
+        cfg['num_labeled']
+                -   Number of image per class. It is only used for train dataset. if None, The dataset is created over the entire data.
+        cfg['data_dir']
+                -   Root path where the text file(train.txt, test.txt) will be saved. The file name will be dataset_type.txt .
+        cfg['dataset_types']
+                -   Type of dataset. ex) ['train', 'test', 'val']
+        cfg['class_name']
+                -   It means the subfolder name created with class name. ex)['covid-19', 'pneumonia', 'normal']
+    '''
+    if image_data_dir == None:
+        image_data_dir = cfg['data_dir']
+
+    if check_dataset_txt(cfg) and  not cfg['overwrite']:
+        print("Dataset is already exists.")
+        return
+
+    if 'class_name' not in cfg.keys():
+        cfg['class_name'] = ['covid-19', 'pneumonia', 'normal']
+    
+    if not os.path.exists(cfg['data_dir']):
+        os.makedirs(cfg['data_dir'])
+
+    for dataset_type in cfg['dataset_types']:
+        image_paths = [glob.glob(os.path.join(image_data_dir,dataset_type,cls_name,'*')) for cls_name in cfg['class_name']]
+        
+        for i, cls_name in enumerate(cfg['class_name']): # Check folder.
+            assert len(image_paths[i]),'{} does not have a {} folder'.format(os.path.join(image_data_dir,dataset_type),cls_name)
+
+        if dataset_type=='train' and cfg['num_labeled'] : # In the case of train, randomly extracted as much as num_labeled.
+            make_train_fold(cfg,image_paths)            
+        else:
+            if dataset_type=='train':
+                print('The dataset is created over the entire data.')
+
+            with open(os.path.join(cfg['data_dir'], '{}.txt'.format(dataset_type)), 'w') as f: # Make txt file.
+                for i, cls_name in enumerate(cfg['class_name']):
+                    for im_path in image_paths[i]:
+                        f.writelines(im_path + " " + cls_name+ "\n")
+            print('"{}.txt" created in {}'.format(dataset_type,cfg['data_dir']))
+
+def check_dataset_txt(cfg):
+    # check val or test dataset
+    for data_type in cfg['dataset_types']:
+        if data_type =='train':
+            continue
+        if not os.path.exists(os.path.join(cfg['data_dir'], f'{data_type}.txt')):
+            return False
+    # check train dataset
+    if cfg['num_labeled']:
+        for i in range(cfg['fold']):
+            if not os.path.exists(os.path.join(cfg['data_dir'], f'train_lb_{i}.txt')):
+                return False
+            if cfg['purpose']!='baseline' and not os.path.exists(os.path.join(cfg['data_dir'], f'train_lb_{i}.txt')):
+                return False
+    elif not os.path.exists(os.path.join(cfg['data_dir'], 'train.txt')) :
+        return False
+
+    return True
+
+def make_train_fold(cfg,image_paths):
     '''
     Split the dataset randomly by 'fold' parameter.
     Args:
-        data_dir: Root path of dataset. ex) ./data/CXR or ./data/CT
-        fold: Number of times to split data
-        labeled_num_per_cls, mu: Number of labeled image per class. Number of unlabeld image will be labeled_num_per_cls * mu per class.
-        outpath: Root path where the text file(train_lb_%.txt, train_ulb_%.txt) will be saved
+        image_paths
+                -   The path of train image datasets
+        cfg['fold']
+                -   Number of times to split data
+        cfg['num_labeled'], cfg['mu']
+                -   Number of labeled image per class. Number of unlabeld image will be num_labeled * mu per class.
+        cfg['data_dir']
+                -   Root path where the text file(train_lb_%.txt, train_ulb_%.txt) will be saved
     '''
+    unlabeled_image_num = cfg['num_labeled'] * len(cfg['class_name']) * cfg['mu'] # unlabeled_num = labeled_num * mu = num_labeled * len(class_name) * mu
 
-    if class_name == None:
-        class_name = ['covid-19', 'pneumonia', 'normal']
-
-    if not os.path.exists(outpath):
-        os.makedirs(outpath)
-
-    image_paths = [glob.glob(os.path.join(data_dir,'train',cls_name,'*')) for cls_name in class_name]
-    unlabeled_image_num = labeled_num_per_cls * len(class_name) * mu # unlabeled_num = labeled_num * mu = labeled_num_per_cls * len(class_name) * mu
-
-    for i, cls_name in enumerate(class_name):  # Check folder.
-        assert len(image_paths[i]), '{} does not have a {} folder'.format(os.path.join(data_dir, 'train'),cls_name)
-
-    for n in range(fold): # Make txt file.
+    for n in range(cfg['fold']): # Make txt file.
         all_image_paths, labeled_image_paths = [], []
         for im_path in image_paths:
             all_image_paths += im_path
-            labeled_image_paths.append(np.random.choice(im_path,labeled_num_per_cls,replace=False)) # Random choice image per class.
+            labeled_image_paths.append(np.random.choice(im_path,cfg['num_labeled'],replace=False)) # Random choice image per class.
 
-        file_name = os.path.join(outpath , f'train_lb_{n}.txt')
+        file_name = os.path.join(cfg['data_dir'] , f'train_lb_{n}.txt')
         with open(file_name, 'w') as f:
-            for i in range(labeled_num_per_cls):
-                for j,cls_name in enumerate(class_name):
+            for i in range(cfg['num_labeled']):
+                for j,cls_name in enumerate(cfg['class_name']):
                     f.writelines(labeled_image_paths[j][i] + " " + cls_name+ "\n")
                     all_image_paths.remove(labeled_image_paths[j][i]) # Delete to avoid duplication.
-        print('"train_lb_{}.txt" created in {}'.format(n,outpath))
+        print('"train_lb_{}.txt" created in {}'.format(n,cfg['data_dir']))
 
         unlabeled_image_paths = np.random.choice(all_image_paths,unlabeled_image_num,replace=False)
-        file_name = os.path.join(outpath, f'train_ulb_{n}.txt')
+        file_name = os.path.join(cfg['data_dir'], f'train_ulb_{n}.txt')
         with open(file_name, 'w') as f:
             for unlabeled_image in unlabeled_image_paths:
                 f.writelines(unlabeled_image + "\n")
-        print('"train_ulb_{}.txt" created in {}'.format(n, outpath))
-    return True
+        print('"train_ulb_{}.txt" created in {}'.format(n, cfg['data_dir']))
 
-def make_baseline_dataset(data_dir,labeled_num_per_cls=None,outpath = './data/CXR', dataset_types = None, class_name = None):
-    '''
-    Make baseline dataset text file
-    Args:
-        data_dir: Root path of dataset. ex) ./data/CXR or ./data/CT
-        labeled_num_per_cls: Number of image per class. It is only used for train dataset
-                            if None, The dataset is created over the entire data.
-        outpath: Root path where the text file(train.txt, test.txt) will be saved.
-                The file name will be dataset_type.txt .
-        dataset_types: Type of dataset. ex) ['train', 'test', 'val']
-        class_name : It means the subfolder name created with class name. ex)['covid-19', 'pneumonia', 'normal']
-    '''
-
-    if dataset_types == None:
-        dataset_types = ['train', 'test']
-
-    if class_name == None:
-        class_name = ['covid-19', 'pneumonia', 'normal']
-
-    if not os.path.exists(outpath):
-        os.makedirs(outpath)
-
-    for dataset_type in dataset_types:
-        image_paths = [glob.glob(os.path.join(data_dir,dataset_type,cls_name,'*')) for cls_name in class_name]
-
-        for i, cls_name in enumerate(class_name): # Check folder.
-            assert len(image_paths[i]),'{} does not have a {} folder'.format(os.path.join(data_dir,dataset_type),cls_name)
-
-        if dataset_type=='train' and labeled_num_per_cls != None: # In the case of train, randomly extracted as much as labeled_num_per_cls.
-            image_paths = [np.random.choice(im_path, labeled_num_per_cls , replace=False) for im_path in image_paths]
-        elif dataset_type=='train':
-            print('The dataset is created over the entire data.')
-
-        with open(os.path.join(outpath, '{}.txt'.format(dataset_type)), 'w') as f: # Make txt file.
-            for i, cls_name in enumerate(class_name):
-                for im_path in image_paths[i]:
-                    f.writelines(im_path + " " + cls_name+ "\n")
-        print('"{}.txt" created in {}'.format(dataset_type,outpath))
-    return True
-
-def create_datasets(cfg):
-    '''Create datasets into baseline or the seperated type.
-    
-    Args:
-        cfg (dict): The cfg parameter must have purpose, data dir information and mu
-                    (Used only when purpose is not baseline).
-    Returns:
-        nothing
-    '''
-    # Make baseline datasets
-    if not os.path.exists(os.path.join(cfg['data_dir'], 'test.txt')) or cfg['overwrite']:
-        from datasets.utils import make_baseline_dataset
-        make_baseline_dataset(cfg['data_dir'], cfg['num_labeled'],
-                              outpath=cfg['data_dir']) # test는 전부, train은 25개 만큼만
-        
-    # Make separated datasets
-    if cfg['purpose'] == 'fixmatch' \
-    and (not os.path.exists(os.path.join(cfg['data_dir'], 'train_lb_0.txt')) or cfg['overwrite']):
-        from datasets.utils import separate_datasets
-        separate_datasets(cfg['data_dir'], cfg['fold'], cfg['epochs'],
-                          cfg['mu'],outpath=cfg['data_dir']) # lb는 25개, ulb는 mu*25개
-        
-def get_data_loaders(dataset_type, cfg, dataset_sizes={}, data_loaders={}, fold_id=None, overwrite=False):
+            
+def get_data_loaders(dataset_type, cfg, dataset_sizes=None, data_loaders=None, fold_id=None, overwrite=False):
     '''Return data loaders.
     
     Args:
@@ -134,6 +130,11 @@ def get_data_loaders(dataset_type, cfg, dataset_sizes={}, data_loaders={}, fold_
     # Remove fold_id for baseline
     if cfg['purpose'] == 'baseline':
         fold_id = None
+
+    if dataset_sizes ==None:
+        dataset_sizes={}
+    if data_loaders ==None:
+        data_loaders={}
         
     # Create CovidDataLoader
     covid_data_loader = CovidDataLoader(dataset_type, cfg, fold_id=fold_id)

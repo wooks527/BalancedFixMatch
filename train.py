@@ -12,8 +12,9 @@ if __name__ == '__main__':
     # Create configs
     parser = argparse.ArgumentParser(description='Train FixMatch model.')
     parser.add_argument('--purpose', type=str, default='fixmatch', help='model type')
+    parser.add_argument('--images_dir', type=str, default='./data/CXR', help='input images data directory')
     parser.add_argument('--data_dir', type=str, default='./data/CXR', help='input data directory')
-    parser.add_argument('--num_labeled', type=int, default=25, help='the number of labeled data')
+    parser.add_argument('--num_labeled', type=int, default=25, help='the number of labeled data per class')
     parser.add_argument('--mu', type=int, default=4, help='ratio for unlabeled data')
     parser.add_argument('--fold', type=int, default=5, help='the number of sampled dataset')
     parser.add_argument('--epochs', type=int, default=20, help='epochs')
@@ -35,8 +36,11 @@ if __name__ == '__main__':
         init_file_for_print()
 
     # Create datasets
-    create_datasets(cfg)
-    
+    if cfg['images_dir']==cfg['data_dir']:
+        create_datasets(cfg)
+    else:
+        create_datasets(cfg,cfg['images_dir'])
+
     # Train the models
     trained_models = train_models(cfg)
     print('Training is completed.')
