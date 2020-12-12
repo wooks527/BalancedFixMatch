@@ -30,7 +30,11 @@ class CovidDataLoader(torch.utils.data.Dataset):
             self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'],'{}.txt'.format(dataset_types)))
             return
         elif cfg['purpose'] =='baseline':
-            self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'],'train.txt'))
+            if fold_id==None:
+                print('The data loader did not receive any information about the fold id.\nSo the dataset is loaded over the entire train data.')
+                self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'], 'train.txt'))
+            else:
+                self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'] , f'train_lb_{fold_id}.txt'))
         else:
             assert fold_id!=None,'No fold_id was received.'
             self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'] , f'train_lb_{fold_id}.txt'))

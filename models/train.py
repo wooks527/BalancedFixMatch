@@ -165,7 +165,10 @@ def train_models(cfg):
 
     # Set parameters
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='test', cfg=cfg)
+    try:
+        data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='val', cfg=cfg)
+    except:
+        data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='test', cfg=cfg)
     mean_metrics = {m_type: defaultdict(tuple) for m_type in cfg['metric_types']}
     metric_targets = ['all'] + class_names
 

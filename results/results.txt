@@ -1,0 +1,51 @@
+--------------------
+Model 1
+--------------------
+
+Epoch 0/1
+----------
+[train]
+LOSS - 1.0491
+ACC - 0.3867
+PPV - ALL: 0.3311  COVID-19: 0.5172  PNEUMONIA: 0.1429  NORMAL: 0.3333 
+RECALL - ALL: 0.3867  COVID-19: 0.6000  PNEUMONIA: 0.0400  NORMAL: 0.5200 
+F1 - ALL: 0.3414  COVID-19: 0.5555  PNEUMONIA: 0.0625  NORMAL: 0.4062 
+Mask ratio's range: 1.0 ~ 1.0
+
+--------------------
+Model 1
+--------------------
+
+Epoch 0/1
+----------
+--------------------
+Model 1
+--------------------
+
+Epoch 0/1
+----------
+[train]
+LOSS - 1.0692
+ACC - 0.4133
+PPV - ALL: 0.3479  COVID-19: 0.5000  PNEUMONIA: 0.2000  NORMAL: 0.3438 
+RECALL - ALL: 0.4133  COVID-19: 0.7600  PNEUMONIA: 0.0400  NORMAL: 0.4400 
+F1 - ALL: 0.3520  COVID-19: 0.6032  PNEUMONIA: 0.0667  NORMAL: 0.3860 
+Mask ratio's range: 1.0 ~ 1.0
+
+[val]
+LOSS - 1.0052
+ACC - 0.5208
+PPV - ALL: 0.5981  COVID-19: 0.8270  PNEUMONIA: 0.4534  NORMAL: 0.5140 
+RECALL - ALL: 0.4687  COVID-19: 0.2750  PNEUMONIA: 0.3372  NORMAL: 0.7939 
+F1 - ALL: 0.4745  COVID-19: 0.4127  PNEUMONIA: 0.3868  NORMAL: 0.6240 
+
+Epoch 1/1
+----------
+[train]
+LOSS - 0.8722
+ACC - 0.8133
+PPV - ALL: 0.8424  COVID-19: 0.9474  PNEUMONIA: 0.6667  NORMAL: 0.9130 
+RECALL - ALL: 0.8133  COVID-19: 0.7200  PNEUMONIA: 0.8800  NORMAL: 0.8400 
+F1 - ALL: 0.8173  COVID-19: 0.8182  PNEUMONIA: 0.7586  NORMAL: 0.8750 
+Mask ratio's range: 1.0 ~ 1.0
+
