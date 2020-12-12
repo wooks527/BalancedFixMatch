@@ -118,8 +118,9 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
             # Calcluate the metrics (e.g. Accuracy) per the epoch
             epoch_metrics = get_epoch_metrics(epoch_loss, dataset_sizes, phase,
                                               class_names, batch_metrics, metric_types)
-            epoch_metrics_list.append(epoch_metrics)
             print_metrics(epoch_metrics, metric_targets, print_to_file, phase=phase, mask_ratio=mask_ratio)
+            if phase != 'train':
+                epoch_metrics_list.append(epoch_metrics)
 
         # Check early stopping
         if phase == 'test' and is_early:
@@ -129,9 +130,9 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                 break
 
     # Set best metrics based on recent 5 epochs metrics
-    for metric_type in metric_types:
-        for metric_target in metric_targets:
-            # Accuracy couldn't calculate in each class
+    for metric_type in metric_types: # e.g. ['acc', 'ppv', ...]
+        for metric_target in metric_targets: # e.g. ['all', 'covid-19', ...]
+            # Accuracy couldn't calculate for each class
             if metric_type == 'acc' and metric_target in class_names:
                 continue
 
