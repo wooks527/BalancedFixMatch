@@ -104,14 +104,14 @@ def create_datasets(cfg):
         nothing
     '''
     # Make baseline datasets
-    if not os.path.exists(os.path.join(cfg['data_dir'],'test.txt')):
+    if not os.path.exists(os.path.join(cfg['data_dir'], 'test.txt')) or cfg['overwrite']:
         from datasets.utils import make_baseline_dataset
         make_baseline_dataset(cfg['data_dir'], cfg['num_labeled'],
                               outpath=cfg['data_dir']) # test는 전부, train은 25개 만큼만
         
     # Make separated datasets
     if cfg['purpose'] == 'fixmatch' \
-    and not os.path.exists(os.path.join(cfg['data_dir'],'train_lb_0.txt')):
+    and (not os.path.exists(os.path.join(cfg['data_dir'], 'train_lb_0.txt')) or cfg['overwrite']):
         from datasets.utils import separate_datasets
         separate_datasets(cfg['data_dir'], cfg['fold'], cfg['epochs'],
                           cfg['mu'],outpath=cfg['data_dir']) # lb는 25개, ulb는 mu*25개

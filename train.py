@@ -18,6 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--fold', type=int, default=5, help='the number of sampled dataset')
     parser.add_argument('--epochs', type=int, default=20, help='epochs')
     parser.add_argument('--batch_size', type=int, default=6, help='batch size')
+    parser.add_argument('--overwrite', action='store_true', help='whether overwrite text files for training and test')
     parser.add_argument('--metric_types', type=str, nargs='+', default=['acc', 'ppv', 'recall', 'f1'], help='metric types')
     parser.add_argument('--dataset_types', type=str, nargs='+', default=['train', 'test'], help='dataset types')
     cfg = vars(parser.parse_args())

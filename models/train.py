@@ -129,13 +129,16 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
 
     # Set best metrics based on recent 5 epochs metrics
     for metric_type in metric_types:
-        if metric_type == 'acc':
-            best_metrics[metric_type]['all'] = np.array([em[metric_type]['all']
-                                                         for em in epoch_metrics_list[-5:]]).mean()
-        else:
-            for metric_target in metric_targets:
-                best_metrics[metric_type][metric_target] = np.array([em[metric_type][metric_target]
-                                                               for em in epoch_metrics_list[-5:]]).mean()
+        for metric_target in metric_targets:
+            # Accuracy couldn't calculate in each class
+            if metric_type == 'acc' and metric_target in class_names:
+                continue
+
+            best_mean = np.array([em[metric_type][metric_target]
+                                    for em in epoch_metrics_list[-5:]]).mean()
+            best_std = np.array([em[metric_type][metric_target]
+                                for em in epoch_metrics_list[-5:]]).std()
+            best_metrics[metric_type][metric_target] = (best_mean, best_std)
 
     print_metrics(best_metrics, metric_targets, phase='Best results')
     time_elapsed = time.time() - since
@@ -155,7 +158,7 @@ def train_models(cfg):
     '''
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='test', cfg=cfg)
-    mean_metrics = {m_type: defaultdict(float) for m_type in cfg['metric_types']}
+    mean_metrics = {m_type: defaultdict(tuple) for m_type in cfg['metric_types']}
     metric_targets = ['all'] + class_names
 
     trained_models = []
