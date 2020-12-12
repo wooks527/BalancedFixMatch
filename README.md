@@ -23,6 +23,5 @@ AVIDNet is the model to classify COVID-19 based on Chest X-ray or CT images.
 
 These are tutorials for training or test AVIDNet using CXR images:
 
-* [Train and test AVIDNet for baseline model](train_and_test_aivdnet_with_cxr_and_baseline.ipynb)
-* [Train and test AVIDNet with FixMatch](train_and_test_aivdnet_with_cxr_and_fixmatch.ipynb)
+* [Train and test AVIDNet](train.ipynb)
 
