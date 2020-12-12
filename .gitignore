@@ -2,5 +2,5 @@
 .idea/
 data/
 trained_models/
-
+results/
 *.pyc
