@@ -45,12 +45,11 @@ def get_model(device, fine_tuning=True, scheduler='cos', step_size=7):
     
     return model_ft, criterion, optimizer_ft, exp_lr_scheduler
 
-def save_model(trained_models, out_dir, cfg):
+def save_model(trained_model, cfg):
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
 
-    for i, model in enumerate(trained_models):
-        torch.save(model, f'trained_models/{cfg["purpose"]}/{cfg["purpose"]}_model_{i}.pt')
+    torch.save(model, f'{cfg["out_dir"]}/{cfg["purpose"]}/{cfg["purpose"]}_model_{i}.pt')
 
 def load_model(cfg):
     model_dir = f'trained_models/{cfg["purpose"]}'

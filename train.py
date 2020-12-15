@@ -41,8 +41,8 @@ if __name__ == '__main__':
     else:
         create_datasets(cfg,cfg['images_dir'])
 
-    # Train the models
-    trained_models = train_models(cfg)
+    # Train the models (index will be used for distributed TPUs)
+    trained_models = train_models(index=None, cfg=cfg)
     print('Training is completed.')
     
     # Save the models

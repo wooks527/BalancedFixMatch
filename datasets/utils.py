@@ -1,14 +1,18 @@
 import torch
 import torchvision
+import torch_xla.core.xla_model as xm
+
 import numpy as np
 import shutil
 import glob
 import os
 import random
+
 from torchvision import datasets
 from matplotlib import pyplot as plt
 from datasets.dataloader import CovidDataLoader
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 def create_datasets(cfg, image_data_dir=None):
     '''
@@ -137,8 +141,16 @@ def get_data_loaders(dataset_type, cfg, dataset_sizes=None, data_loaders=None, f
     class_names = list(covid_data_loader.class_names.values())
     
     # Create torch DataLoader
-    data_loader = DataLoader(covid_data_loader, batch_size=cfg['batch_size'], num_workers=4, shuffle=True,
-                             collate_fn=covid_data_loader.collate_fn)
+    data_sampler = None
+    if cfg['use_tpu']:
+        shuffle = True if dataset_type == 'train' else False
+        data_sampler = DistributedSampler(covid_data_loader,
+                                          num_replicas=xm.xrt_world_size(),
+                                          rank=xm.get_ordinal(),
+                                          shuffle=shuffle)
+
+    data_loader = DataLoader(covid_data_loader, batch_size=cfg['batch_size'], num_workers=8,
+                             sampler=data_sampler, collate_fn=covid_data_loader.collate_fn, drop_last=True)
     data_loaders[dataset_type] = data_loader
     
     return data_loaders, dataset_sizes, class_names

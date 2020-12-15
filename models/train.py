@@ -1,5 +1,7 @@
 import torch
 import torch.nn.functional as F
+import torch_xla.core.xla_model as xm
+import torch_xla.distributed.parallel_loader as pl
 import time
 import copy
 import os
@@ -8,7 +10,7 @@ import torch
 
 from collections import defaultdict
 from datasets.utils import get_data_loaders
-from models.model import get_model
+from models.model import get_model, save_model
 from models.metrics import update_batch_metrics, get_epoch_metrics, update_mean_metrics, print_metrics
 
 def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_targets, metric_types,
@@ -65,8 +67,11 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                              'fp': defaultdict(int), 'fn': defaultdict(int)}
             mask_ratio = []  # just for fixmatch
 
+            # Create a pareallel loader
+            para_data_loader = pl.ParallelLoader(data_loaders[phase], [device]).per_device_loader(device)
+
             # Iterate over data.
-            for batch in data_loaders[phase]:
+            for batch in para_data_loader:
                 # Load batches
                 inputs_lb, labels = batch['img_lb'], batch['label']
                 inputs_lb = inputs_lb.to(device)
@@ -101,7 +106,11 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                     # backward + optimize only if in training phase
                     if phase == 'train':
                         loss.backward()
-                        optimizer.step()
+
+                        if cfg['use_tpu']:
+                            xm.optimizer_step(optimizer)
+                        else:
+                            optimizer.step()
 
                 # Calculate loss and metrics per the batch
                 if purpose == 'baseline' or phase == 'test':
@@ -112,8 +121,8 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
 
                 batch_metrics = update_batch_metrics(batch_metrics, preds, labels, class_names)
 
-            if phase == 'train':
-                scheduler.step()
+            # if phase == 'train':
+            #     scheduler.step()
 
             # Calcluate the metrics (e.g. Accuracy) per the epoch
             epoch_metrics = get_epoch_metrics(epoch_loss, dataset_sizes, phase,
@@ -149,7 +158,7 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
 
     return model, best_metrics
 
-def train_models(cfg):
+def train_models(index, cfg):
     '''Train models for fold times.
     
     Args:
@@ -164,7 +173,13 @@ def train_models(cfg):
     print = set_print_to_file(print, cfg)
 
     # Set parameters
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if cfg['use_tpu']:
+        # Acquires the (unique) Cloud TPU core corresponding to this process's index
+        device = xm.xla_device()
+        print("Process", index ,"is using", xm.xla_real_devices([str(device)])[0])
+    else:
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     try:
         data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='val', cfg=cfg)
     except:
@@ -173,7 +188,6 @@ def train_models(cfg):
     metric_targets = ['all'] + class_names
 
     # Train the models
-    trained_models = []
     for i in range(cfg['fold']):
         data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='train', cfg=cfg,
                                                                     dataset_sizes=dataset_sizes,
@@ -183,14 +197,14 @@ def train_models(cfg):
         model, metrics = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, i, class_names, metric_targets,
                                      cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, cfg,
                                      num_epochs=cfg['epochs'], lambda_u=1.0, threshold=0.95, purpose=cfg['purpose'], is_early=False)
-        trained_models.append(model)
+
+        # save_model(model, cfg)
+        del model_ft, model
         mean_metrics = update_mean_metrics(metric_targets, mean_metrics, metrics, status='training')
 
     # Calculate mean metrics
     mean_metrics = update_mean_metrics(metric_targets, mean_metrics, status='final', fold=cfg['fold'])
     print_metrics(mean_metrics, metric_targets, cfg, phase='Mean results')
-    
-    return trained_models
 
 
 class EarlyStopping:
