@@ -1,6 +1,6 @@
 import torch
 import torchvision
-import torch_xla.core.xla_model as xm
+# import torch_xla.core.xla_model as xm
 
 import numpy as np
 import shutil

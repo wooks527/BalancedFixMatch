@@ -25,7 +25,7 @@ def get_model(device, fine_tuning=True, scheduler='cos', step_size=7):
     '''
     # Get the pre-trained model
     model_ft = models.resnet50(pretrained=True)
-    if fine_tuning:
+    if not fine_tuning:
         for param in model_ft.parameters():
             param.requires_grad = fine_tuning
             
@@ -37,17 +37,19 @@ def get_model(device, fine_tuning=True, scheduler='cos', step_size=7):
     # Set loss function, optimizer and learning scheduler
     criterion = nn.CrossEntropyLoss()
     optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
-    exp_lr_scheduler = CosineAnnealingWarmUpRestarts(optimizer_ft,
-                                                     T_0=5, T_mult=1,
-                                                     eta_max=0.1, T_up=10)
     if scheduler == 'step':
         exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=step_size, gamma=0.1)
+    else: # cosine annealing
+        exp_lr_scheduler = CosineAnnealingWarmUpRestarts(optimizer_ft,
+                                                         T_0=5, T_mult=1,
+                                                         eta_max=0.1, T_up=10)
+
     
     return model_ft, criterion, optimizer_ft, exp_lr_scheduler
 
 def save_model(trained_model, cfg):
-    if not os.path.isdir(out_dir):
-        os.makedirs(out_dir)
+    if not os.path.isdir(cfg['out_dir']):
+        os.makedirs(cfg['out_dir'])
 
     torch.save(model, f'{cfg["out_dir"]}/{cfg["purpose"]}/{cfg["purpose"]}_model_{i}.pt')
 

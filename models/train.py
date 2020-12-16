@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
-import torch_xla.core.xla_model as xm
-import torch_xla.distributed.parallel_loader as pl
+# import torch_xla.core.xla_model as xm
+# import torch_xla.distributed.parallel_loader as pl
 import time
 import copy
 import os
@@ -68,10 +68,17 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
             mask_ratio = []  # just for fixmatch
 
             # Create a pareallel loader
-            para_data_loader = pl.ParallelLoader(data_loaders[phase], [device]).per_device_loader(device)
+            if cfg['use_tpu']:
+                # if phase == 'train':
+                #     data_loaders[phase].sampler.set_epoch(epoch)
+
+                final_data_loader = pl.ParallelLoader(data_loaders[phase], [device]).per_device_loader(device)
+            else:
+                final_data_loader = data_loaders[phase]
+
 
             # Iterate over data.
-            for batch in para_data_loader:
+            for batch in final_data_loader:
                 # Load batches
                 inputs_lb, labels = batch['img_lb'], batch['label']
                 inputs_lb = inputs_lb.to(device)
@@ -193,10 +200,12 @@ def train_models(index, cfg):
                                                                     dataset_sizes=dataset_sizes,
                                                                     data_loaders=data_loaders, fold_id=i)
 
-        model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device, fine_tuning=cfg['is_finetuning'], scheduler='step')
+        model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device, fine_tuning=cfg['is_finetuning'],
+                                                                        scheduler=cfg['scheduler'])
         model, metrics = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, i, class_names, metric_targets,
                                      cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, cfg,
-                                     num_epochs=cfg['epochs'], lambda_u=1.0, threshold=0.95, purpose=cfg['purpose'], is_early=False)
+                                     num_epochs=cfg['epochs'], lambda_u=cfg['lambda_u'], threshold=cfg['threshold'],
+                                     purpose=cfg['purpose'], is_early=False)
 
         # save_model(model, cfg)
         del model_ft, model
