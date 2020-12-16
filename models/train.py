@@ -145,18 +145,22 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                 print("Early stopping!!")
                 break
 
+    # Extract best case index
+    best_acc = (-1, -1) # (idx, acc)
+    for e_met_idx, e_met in enumerate(epoch_metrics_list):
+        best_acc = max((e_met_idx, e_met['acc']['all']),
+                       best_acc, key=lambda x: x[1])
+    best_acc_idx = best_acc[0]
+
     # Set best metrics based on recent 5 epochs metrics
     for metric_type in metric_types: # e.g. ['acc', 'ppv', ...]
         for metric_target in metric_targets: # e.g. ['all', 'covid-19', ...]
             # Accuracy couldn't calculate for each class
             if metric_type == 'acc' and metric_target in class_names:
                 continue
-
-            best_mean = np.array([em[metric_type][metric_target]
-                                    for em in epoch_metrics_list[-5:]]).mean()
-            best_std = np.array([em[metric_type][metric_target]
-                                for em in epoch_metrics_list[-5:]]).std()
-            best_metrics[metric_type][metric_target] = (best_mean, best_std)
+                
+            best_metrics[metric_type][metric_target] = \
+                epoch_metrics_list[best_acc_idx][metric_type][metric_target]
 
     print_metrics(best_metrics, metric_targets, cfg, phase='Best results')
     time_elapsed = time.time() - since
@@ -191,7 +195,7 @@ def train_models(index, cfg):
         data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='val', cfg=cfg)
     except:
         data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='test', cfg=cfg)
-    mean_metrics = {m_type: defaultdict(tuple) for m_type in cfg['metric_types']}
+    mean_metrics = {m_type: defaultdict(list) for m_type in cfg['metric_types']}
     metric_targets = ['all'] + class_names
 
     # Train the models
