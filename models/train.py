@@ -148,8 +148,8 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
     # Extract best case index
     best_acc = (-1, -1) # (idx, acc)
     for e_met_idx, e_met in enumerate(epoch_metrics_list):
-        best_acc = max((e_met_idx, e_met['acc']['all']),
-                       best_acc, key=lambda x: x[1])
+        if e_met['acc']['all'] > best_acc[1]:
+            best_acc = ((e_met_idx, e_met['acc']['all']))
     best_acc_idx = best_acc[0]
 
     # Set best metrics based on recent 5 epochs metrics
