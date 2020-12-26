@@ -11,7 +11,7 @@ from models.utils import *
 # cosine_annearing_with_warmup is referenced by below github repository.
 # https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup
 
-def get_model(device, iters,fine_tuning=True, scheduler='cos', step_size=7, use_tpu=False, lr=0.001,momentum=0.9,weight_decay=5e-4,old_optimizer=False):
+def get_model(device, iters,freeze_conv=False, scheduler='cos', step_size=7, use_tpu=False, lr=0.001,momentum=0.9,weight_decay=5e-4,old_optimizer=False):
     '''Create and return the model based on ResNet-50.
     
     Args:

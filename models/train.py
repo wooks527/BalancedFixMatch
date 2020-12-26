@@ -218,7 +218,7 @@ def train_models(index, cfg):
                                                                     data_loaders=data_loaders, fold_id=i)
         
         iters = int(np.ceil(dataset_sizes['train']/cfg['batch_size'])) * cfg['epochs']
-        model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device,iters, fine_tuning=cfg['is_finetuning'],
+        model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device,iters, freeze_conv=cfg['freeze_conv'],
                                                                         scheduler=cfg['scheduler'], use_tpu=cfg['use_tpu'],lr=cfg['lr'],momentum=cfg['momentum'],
                                                                         weight_decay=cfg['weight_decay'],old_optimizer=cfg['is_old_optimizer'])
         model, metrics = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, i, class_names, metric_targets,

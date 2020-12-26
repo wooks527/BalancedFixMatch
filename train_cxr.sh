@@ -26,7 +26,6 @@ do
 	                        --epochs $epoch \
 	                        --batch_size $batch_size \
 	                        --random_seed $random_seed \
-	                        --is_finetuning \
 	                        --print_to_file \
 	                        --metric_types acc ppv recall f1 \
 	                        --dataset_types train test
@@ -48,7 +47,6 @@ do
 	                                --epochs $epoch \
 	                                --batch_size $batch_size \
 	                                --random_seed $random_seed \
-	                                --is_finetuning \
 	                                --print_to_file \
 	                                --metric_types acc ppv recall f1 \
 	                                --dataset_types train test
