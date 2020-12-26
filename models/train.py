@@ -82,6 +82,7 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
 
             # Iterate over data.
             for batch in final_data_loader:
+                size = batch['img_lb'].size(0)
                 # Load batches
                 if purpose != 'baseline' and phase == 'train':
                     inputs = torch.cat([batch['img_lb'],batch['img_ulb'],batch['img_ulb_wa']],0).to(device)
@@ -97,8 +98,8 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                     # Calculate labeled loss
                     outputs = model(inputs)
                     if purpose != 'baseline' and phase == 'train':
-                        outputs_lb = outputs[:cfg['batch_size']]
-                        outputs_ulb, outputs_ulb_wa = outputs[cfg['batch_size']:].chunk(2)
+                        outputs_lb = outputs[:size]
+                        outputs_ulb, outputs_ulb_wa = outputs[size:].chunk(2)
                         del outputs
                     else:
                         outputs_lb = outputs
@@ -126,16 +127,16 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
 
                 # Calculate loss and metrics per the batch
                 if purpose == 'baseline' or phase == 'test':
-                    epoch_loss += loss.item() * cfg['batch_size']
+                    epoch_loss += loss.item() * size
                 else:  # FixMatch
-                    epoch_loss += loss_lb.item() * cfg['batch_size']\
-                                    + loss_ulb.item() * lambda_u * cfg['batch_size']*cfg['mu']
+                    epoch_loss += loss_lb.item() *size\
+                                    + loss_ulb.item() * lambda_u * size * cfg['mu']
 
                 if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
                     batch_metrics = update_batch_metrics(batch_metrics, preds, labels, class_names)
 
-            # if phase == 'train':
-            #     scheduler.step()
+            if phase == 'train':
+                scheduler.step()
 
             # Calcluate the metrics (e.g. Accuracy) per the epoch
             if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
@@ -215,9 +216,11 @@ def train_models(index, cfg):
         data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='train', cfg=cfg,
                                                                     dataset_sizes=dataset_sizes,
                                                                     data_loaders=data_loaders, fold_id=i)
-
-        model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device, fine_tuning=cfg['is_finetuning'],
-                                                                        scheduler=cfg['scheduler'], use_tpu=cfg['use_tpu'])
+        
+        iters = int(np.ceil(dataset_sizes['train']/cfg['batch_size'])) * cfg['epochs']
+        model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device,iters, fine_tuning=cfg['is_finetuning'],
+                                                                        scheduler=cfg['scheduler'], use_tpu=cfg['use_tpu'],lr=cfg['lr'],momentum=cfg['momentum'],
+                                                                        weight_decay=cfg['weight_decay'],old_optimizer=cfg['is_old_optimizer'])
         model, metrics = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, i, class_names, metric_targets,
                                      cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, cfg,
                                      num_epochs=cfg['epochs'], lambda_u=cfg['lambda_u'], threshold=cfg['threshold'],

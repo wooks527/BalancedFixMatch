@@ -7,10 +7,11 @@ from torch.optim import lr_scheduler
 from torchvision import models
 from torchsummary import summary
 from models.cosine_annearing_with_warmup import CosineAnnealingWarmUpRestarts
+from models.utils import *
 # cosine_annearing_with_warmup is referenced by below github repository.
 # https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup
 
-def get_model(device, fine_tuning=True, scheduler='cos', step_size=7, use_tpu=False, lr=0.001):
+def get_model(device, iters,fine_tuning=True, scheduler='cos', step_size=7, use_tpu=False, lr=0.001,momentum=0.9,weight_decay=5e-4,old_optimizer=False):
     '''Create and return the model based on ResNet-50.
     
     Args:
@@ -39,13 +40,24 @@ def get_model(device, fine_tuning=True, scheduler='cos', step_size=7, use_tpu=Fa
     if use_tpu:
         import torch_xla.core.xla_model as xm
         lr = 0.001 * xm.xrt_world_size()
-    optimizer_ft = optim.SGD(model_ft.parameters(), lr=lr, momentum=0.9)
+    
+    if old_optimizer:
+        optimizer_ft = optim.SGD(model_ft.parameters(), lr=lr, momentum=0.9)
+    else:
+        optimizer_ft = get_SGD(model_ft, 'SGD', lr, momentum, weight_decay)
+    
     if scheduler == 'step':
         exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=step_size, gamma=0.1)
-    else: # cosine annealing
-        exp_lr_scheduler = CosineAnnealingWarmUpRestarts(optimizer_ft,
-                                                         T_0=5, T_mult=1,
-                                                         eta_max=0.1, T_up=10)
+    else: 
+        # cosine annealing
+        if old_optimizer:
+            exp_lr_scheduler = CosineAnnealingWarmUpRestarts(optimizer_ft,
+                                                            T_0=5, T_mult=1,
+                                                            eta_max=0.1, T_up=10)
+        else:
+            exp_lr_scheduler = get_cosine_schedule_with_warmup(optimizer,
+                                                        iters,
+                                                        num_warmup_steps=iters*0)
 
     
     return model_ft, criterion, optimizer_ft, exp_lr_scheduler
