@@ -27,4 +27,7 @@ def set_print_to_file(print, cfg):
             return wrapped_func
         
         return file_print(print)
+    elif cfg['use_tpu']:
+        import torch_xla.core.xla_model as xm
+        return xm.master_print
     return print

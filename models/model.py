@@ -10,7 +10,7 @@ from models.cosine_annearing_with_warmup import CosineAnnealingWarmUpRestarts
 # cosine_annearing_with_warmup is referenced by below github repository.
 # https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup
 
-def get_model(device, fine_tuning=True, scheduler='cos', step_size=7):
+def get_model(device, fine_tuning=True, scheduler='cos', step_size=7, use_tpu=False, lr=0.001):
     '''Create and return the model based on ResNet-50.
     
     Args:
@@ -36,7 +36,10 @@ def get_model(device, fine_tuning=True, scheduler='cos', step_size=7):
     
     # Set loss function, optimizer and learning scheduler
     criterion = nn.CrossEntropyLoss()
-    optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+    if use_tpu:
+        import torch_xla.core.xla_model as xm
+        lr = 0.001 * xm.xrt_world_size()
+    optimizer_ft = optim.SGD(model_ft.parameters(), lr=lr, momentum=0.9)
     if scheduler == 'step':
         exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=step_size, gamma=0.1)
     else: # cosine annealing

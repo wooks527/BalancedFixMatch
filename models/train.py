@@ -1,7 +1,5 @@
 import torch
 import torch.nn.functional as F
-# import torch_xla.core.xla_model as xm
-# import torch_xla.distributed.parallel_loader as pl
 import time
 import copy
 import os
@@ -43,6 +41,10 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
         model (obj): the model which was trained
         best_metrics (dict): the results of the best performance metrics after training the model
     '''
+    # Import XLA libraries for using TPUs
+    if cfg['use_tpu']:
+        import torch_xla.core.xla_model as xm
+        import torch_xla.distributed.parallel_loader as pl
 
     since = time.time()
     if is_early:
@@ -60,6 +62,9 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
             if phase == 'train':
                 model.train()  # Set model to training mode
             else:
+                if not xm.is_master_ordinal():
+                    continue
+                    
                 model.eval()  # Set model to evaluate mode
 
             epoch_loss = 0.0
@@ -68,9 +73,8 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
             mask_ratio = []  # just for fixmatch
 
             # Create a pareallel loader
-            if cfg['use_tpu']:
-                # if phase == 'train':
-                #     data_loaders[phase].sampler.set_epoch(epoch)
+            if cfg['use_tpu'] and phase == 'train':
+                # data_loaders[phase].sampler.set_epoch(epoch)
 
                 final_data_loader = pl.ParallelLoader(data_loaders[phase], [device]).per_device_loader(device)
             else:
@@ -126,15 +130,19 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                     epoch_loss += loss_lb.item() * inputs_lb.size(0) \
                                     + loss_ulb * lambda_u * inputs_ulb.size(0)
 
-                batch_metrics = update_batch_metrics(batch_metrics, preds, labels, class_names)
+                if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
+                    batch_metrics = update_batch_metrics(batch_metrics, preds, labels, class_names)
 
             # if phase == 'train':
             #     scheduler.step()
 
             # Calcluate the metrics (e.g. Accuracy) per the epoch
-            epoch_metrics = get_epoch_metrics(epoch_loss, dataset_sizes, phase,
-                                              class_names, batch_metrics, metric_types)
-            print_metrics(epoch_metrics, metric_targets, cfg, phase=phase, mask_ratio=mask_ratio)
+            if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
+                epoch_metrics = get_epoch_metrics(epoch_loss, dataset_sizes, phase,
+                                                class_names, batch_metrics, metric_types)
+                print_metrics(epoch_metrics, metric_targets, cfg, phase=phase, mask_ratio=mask_ratio)
+
+            # Add prediction results per the epoch
             if phase != 'train':
                 epoch_metrics_list.append(epoch_metrics)
 
@@ -145,24 +153,26 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                 print("Early stopping!!")
                 break
 
-    # Extract best case index
-    best_acc = (-1, -1) # (idx, acc)
-    for e_met_idx, e_met in enumerate(epoch_metrics_list):
-        if e_met['acc']['all'] > best_acc[1]:
-            best_acc = ((e_met_idx, e_met['acc']['all']))
-    best_acc_idx = best_acc[0]
+    if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train' and xm.is_master_ordinal():
+        # Extract best case index
+        best_acc = (-1, -1) # (idx, acc)
+        for e_met_idx, e_met in enumerate(epoch_metrics_list):
+            if e_met['acc']['all'] > best_acc[1]:
+                best_acc = ((e_met_idx, e_met['acc']['all']))
+        best_acc_idx = best_acc[0]
 
-    # Set best metrics based on recent 5 epochs metrics
-    for metric_type in metric_types: # e.g. ['acc', 'ppv', ...]
-        for metric_target in metric_targets: # e.g. ['all', 'covid-19', ...]
-            # Accuracy couldn't calculate for each class
-            if metric_type == 'acc' and metric_target in class_names:
-                continue
-                
-            best_metrics[metric_type][metric_target] = \
-                epoch_metrics_list[best_acc_idx][metric_type][metric_target]
+        # Set best metrics based on recent 5 epochs metrics
+        for metric_type in metric_types: # e.g. ['acc', 'ppv', ...]
+            for metric_target in metric_targets: # e.g. ['all', 'covid-19', ...]
+                # Accuracy couldn't calculate for each class
+                if metric_type == 'acc' and metric_target in class_names:
+                    continue
+                    
+                best_metrics[metric_type][metric_target] = \
+                    epoch_metrics_list[best_acc_idx][metric_type][metric_target]
 
-    print_metrics(best_metrics, metric_targets, cfg, phase='Best results')
+        print_metrics(best_metrics, metric_targets, cfg, phase='Best results')
+
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     print('-' * 20, '\n')
@@ -186,6 +196,7 @@ def train_models(index, cfg):
     # Set parameters
     if cfg['use_tpu']:
         # Acquires the (unique) Cloud TPU core corresponding to this process's index
+        import torch_xla.core.xla_model as xm
         device = xm.xla_device()
         print("Process", index ,"is using", xm.xla_real_devices([str(device)])[0])
     else:
@@ -205,7 +216,7 @@ def train_models(index, cfg):
                                                                     data_loaders=data_loaders, fold_id=i)
 
         model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device, fine_tuning=cfg['is_finetuning'],
-                                                                        scheduler=cfg['scheduler'])
+                                                                        scheduler=cfg['scheduler'], use_tpu=cfg['use_tpu'])
         model, metrics = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, i, class_names, metric_targets,
                                      cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, cfg,
                                      num_epochs=cfg['epochs'], lambda_u=cfg['lambda_u'], threshold=cfg['threshold'],
@@ -213,11 +224,13 @@ def train_models(index, cfg):
 
         # save_model(model, cfg)
         del model_ft, model
-        mean_metrics = update_mean_metrics(metric_targets, mean_metrics, metrics, status='training')
+        if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
+            mean_metrics = update_mean_metrics(metric_targets, mean_metrics, metrics, status='training')
 
     # Calculate mean metrics
-    mean_metrics = update_mean_metrics(metric_targets, mean_metrics, status='final', fold=cfg['fold'])
-    print_metrics(mean_metrics, metric_targets, cfg, phase='Mean results')
+    if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
+        mean_metrics = update_mean_metrics(metric_targets, mean_metrics, status='final', fold=cfg['fold'])
+        print_metrics(mean_metrics, metric_targets, cfg, phase='Mean results')
 
 
 class EarlyStopping:

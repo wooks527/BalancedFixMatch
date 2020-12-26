@@ -142,12 +142,12 @@ def get_data_loaders(dataset_type, cfg, dataset_sizes=None, data_loaders=None, f
     
     # Create torch DataLoader
     data_sampler = None
-    if cfg['use_tpu']:
-        shuffle = True if dataset_type == 'train' else False
+    if cfg['use_tpu'] and dataset_type == 'train':
+        import torch_xla.core.xla_model as xm
         data_sampler = DistributedSampler(covid_data_loader,
                                           num_replicas=xm.xrt_world_size(),
                                           rank=xm.get_ordinal(),
-                                          shuffle=shuffle)
+                                          shuffle=True)
 
     data_loader = DataLoader(covid_data_loader, batch_size=cfg['batch_size'], num_workers=8,
                              sampler=data_sampler, collate_fn=covid_data_loader.collate_fn, drop_last=True)
