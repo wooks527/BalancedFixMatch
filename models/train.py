@@ -62,9 +62,8 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
             if phase == 'train':
                 model.train()  # Set model to training mode
             else:
-                if not xm.is_master_ordinal():
+                if cfg['use_tpu'] and not xm.is_master_ordinal():
                     continue
-                    
                 model.eval()  # Set model to evaluate mode
 
             epoch_loss = 0.0
@@ -84,32 +83,34 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
             # Iterate over data.
             for batch in final_data_loader:
                 # Load batches
-                inputs_lb, labels = batch['img_lb'], batch['label']
-                inputs_lb = inputs_lb.to(device)
-                labels = labels.to(device)
                 if purpose != 'baseline' and phase == 'train':
-                    inputs_ulb, inputs_ulb_wa = batch['img_ulb'], batch['img_ulb_wa']
-                    inputs_ulb = inputs_ulb.to(device)
-                    inputs_ulb_wa = inputs_ulb_wa.to(device)
-
+                    inputs = torch.cat([batch['img_lb'],batch['img_ulb'],batch['img_ulb_wa']],0).to(device)
+                else:
+                    inputs = batch['img_lb'].to(device)
+                labels = batch['label'].to(device)
+                del batch
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
                 # Forward the model
                 with torch.set_grad_enabled(phase == 'train'):
                     # Calculate labeled loss
-                    outputs = model(inputs_lb)
-                    _, preds = torch.max(outputs, 1)
-                    loss = loss_lb = criterion(outputs, labels)
+                    outputs = model(inputs)
+                    if purpose != 'baseline' and phase == 'train':
+                        outputs_lb = outputs[:cfg['batch_size']]
+                        outputs_ulb, outputs_ulb_wa = outputs[cfg['batch_size']:].chunk(2)
+                        del outputs
+                    else:
+                        outputs_lb = outputs
+                    _, preds = torch.max(outputs_lb, 1)
+                    loss = loss_lb = criterion(outputs_lb, labels)
                     
                     # Calculate unlabeled loss for FixMatch
                     if purpose != 'baseline' and phase == 'train':
-                        outputs_ulb = model(inputs_ulb)
                         probs_ulb = torch.softmax(outputs_ulb, dim=-1)
                         probs_ulb, preds_ulb = torch.max(probs_ulb, 1)
                         mask = probs_ulb.ge(threshold).float()
 
-                        outputs_ulb_wa = model(inputs_ulb_wa)
                         loss_ulb = (F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none') * mask).mean()
                         mask_ratio.append(mask.mean().item())
                         loss += loss_ulb * lambda_u
@@ -125,10 +126,10 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
 
                 # Calculate loss and metrics per the batch
                 if purpose == 'baseline' or phase == 'test':
-                    epoch_loss += loss.item() * inputs_lb.size(0)
+                    epoch_loss += loss.item() * cfg['batch_size']
                 else:  # FixMatch
-                    epoch_loss += loss_lb.item() * inputs_lb.size(0) \
-                                    + loss_ulb * lambda_u * inputs_ulb.size(0)
+                    epoch_loss += loss_lb.item() * cfg['batch_size']\
+                                    + loss_ulb.item() * lambda_u * cfg['batch_size']*cfg['mu']
 
                 if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
                     batch_metrics = update_batch_metrics(batch_metrics, preds, labels, class_names)
