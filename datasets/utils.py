@@ -1,14 +1,18 @@
 import torch
 import torchvision
+# import torch_xla.core.xla_model as xm
+
 import numpy as np
 import shutil
 import glob
 import os
 import random
+
 from torchvision import datasets
 from matplotlib import pyplot as plt
 from datasets.dataloader import CovidDataLoader
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 def create_datasets(cfg, image_data_dir=None):
     '''
@@ -27,8 +31,8 @@ def create_datasets(cfg, image_data_dir=None):
     '''
     if image_data_dir == None:
         image_data_dir = cfg['data_dir']
-
-    if check_dataset_txt(cfg) and  not cfg['overwrite']:
+    
+    if check_dataset_txt(cfg) and not cfg['overwrite']:
         print("Dataset is already exists.")
         return
 
@@ -68,11 +72,10 @@ def check_dataset_txt(cfg):
         for i in range(cfg['fold']):
             if not os.path.exists(os.path.join(cfg['data_dir'], f'train_lb_{i}.txt')):
                 return False
-            if cfg['purpose']!='baseline' and not os.path.exists(os.path.join(cfg['data_dir'], f'train_lb_{i}.txt')):
+            if cfg['purpose']!='baseline' and not os.path.exists(os.path.join(cfg['data_dir'], f'train_ulb_{i}.txt')):
                 return False
     elif not os.path.exists(os.path.join(cfg['data_dir'], 'train.txt')) :
         return False
-
     return True
 
 def make_train_fold(cfg,image_paths):
@@ -126,11 +129,7 @@ def get_data_loaders(dataset_type, cfg, dataset_sizes=None, data_loaders=None, f
         data_loaders (dict): data loaders for the dataset type
         dataset_sizes (dict): the number of images for each class in speicific dataset type.
         class_names (list): class names for the dataset type
-    '''
-    # Remove fold_id for baseline
-    if cfg['purpose'] == 'baseline':
-        fold_id = None
-
+    ''' 
     if dataset_sizes ==None:
         dataset_sizes={}
     if data_loaders ==None:
@@ -142,8 +141,16 @@ def get_data_loaders(dataset_type, cfg, dataset_sizes=None, data_loaders=None, f
     class_names = list(covid_data_loader.class_names.values())
     
     # Create torch DataLoader
-    data_loader = DataLoader(covid_data_loader, batch_size=cfg['batch_size'], num_workers=4, shuffle=True,
-                             collate_fn=covid_data_loader.collate_fn)
+    data_sampler = None
+    if cfg['use_tpu'] and dataset_type == 'train':
+        import torch_xla.core.xla_model as xm
+        data_sampler = DistributedSampler(covid_data_loader,
+                                          num_replicas=xm.xrt_world_size(),
+                                          rank=xm.get_ordinal(),
+                                          shuffle=True)
+
+    data_loader = DataLoader(covid_data_loader, batch_size=cfg['batch_size'], num_workers=8,
+                             sampler=data_sampler, collate_fn=covid_data_loader.collate_fn, drop_last=True)
     data_loaders[dataset_type] = data_loader
     
     return data_loaders, dataset_sizes, class_names

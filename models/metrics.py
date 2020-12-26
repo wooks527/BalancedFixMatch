@@ -1,4 +1,5 @@
 import sys
+import numpy as np
 from collections import defaultdict
 
 def update_batch_metrics(batch_metrics, preds, labels, class_names):
@@ -86,28 +87,19 @@ def update_mean_metrics(metric_targets, mean_metrics, metrics=None, status='trai
         for metric_type, targets in metrics.items():
             for metric_target in metric_targets:
                 if targets.get(metric_target):
-                    cur_best_mean, cur_best_std = targets[metric_target]
-
-                    # Initial state of mean_metrics
-                    if not mean_metrics[metric_type].get(metric_target):
-                        best_mean, best_std = 0.0, 0.0
-                    else: # There are values in mean_metrics
-                        best_mean, best_std = mean_metrics[metric_type][metric_target]
-
-                    mean_metrics[metric_type][metric_target] = (cur_best_mean + best_mean,
-                                                                cur_best_std + best_std)
+                    mean_metrics[metric_type][metric_target].append(targets[metric_target])
     else: # final
         for metric_type, targets in mean_metrics.items():
             for metric_target in metric_targets:
                 if targets.get(metric_target):
-                    sum_best_mean, sum_best_std = mean_metrics[metric_type][metric_target]
-                    mean_metrics[metric_type][metric_target] = (sum_best_mean / fold,
-                                                                sum_best_std / fold)
+                    mean = np.array(mean_metrics[metric_type][metric_target]).mean()
+                    std = np.array(mean_metrics[metric_type][metric_target]).std()
+                    mean_metrics[metric_type][metric_target] = (mean, std)
 
     return mean_metrics
     
 
-def print_metrics(epoch_metrics, metric_targets, print_to_file, phase='', mask_ratio=None):
+def print_metrics(epoch_metrics, metric_targets, cfg, phase='', mask_ratio=None):
     '''Print performance metrics.
     
     Args:
@@ -124,7 +116,7 @@ def print_metrics(epoch_metrics, metric_targets, print_to_file, phase='', mask_r
     # Set print's output stream to the file
     from utils import set_print_to_file
     global print
-    print = set_print_to_file(print, print_to_file)
+    print = set_print_to_file(print, cfg)
 
     if 'Best' in phase:
         print(f'\n{"-"*20}')
@@ -134,7 +126,7 @@ def print_metrics(epoch_metrics, metric_targets, print_to_file, phase='', mask_r
         results = f'{metric_type.upper()} -'
         if metric_type == 'loss' or metric_type == 'acc':
             # Do not use for best or mean results because it consist of the mean and std
-            if phase == 'Best results' or phase == 'Mean results':
+            if phase == 'Mean results':
                 best_mean, best_std = targets["all"]
                 results += f' {best_mean:.4f} (±{best_std:.2f})'
             else:
@@ -142,7 +134,7 @@ def print_metrics(epoch_metrics, metric_targets, print_to_file, phase='', mask_r
         else:
             for metric_target in metric_targets:
                 # Do not use for best or mean results because it consist of the mean and std
-                if phase == 'Best results' or phase == 'Mean results':
+                if phase == 'Mean results':
                     best_mean, best_std = targets[metric_target]
                     results += f' {metric_target.upper()}: {best_mean:.4f} (±{best_std:.2f}) '
                 else:

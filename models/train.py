@@ -8,11 +8,11 @@ import torch
 
 from collections import defaultdict
 from datasets.utils import get_data_loaders
-from models.model import get_model
+from models.model import get_model, save_model
 from models.metrics import update_batch_metrics, get_epoch_metrics, update_mean_metrics, print_metrics
 
 def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_targets, metric_types,
-                dataset_types, data_loaders, dataset_sizes, device, print_to_file, num_epochs=25, batch_size=4,
+                dataset_types, data_loaders, dataset_sizes, device, cfg, num_epochs=25, batch_size=4,
                 patience=5, lambda_u=1.0, threshold=0.95, purpose='baseline', is_early=True):
     '''Train the model.
 
@@ -41,6 +41,10 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
         model (obj): the model which was trained
         best_metrics (dict): the results of the best performance metrics after training the model
     '''
+    # Import XLA libraries for using TPUs
+    if cfg['use_tpu']:
+        import torch_xla.core.xla_model as xm
+        import torch_xla.distributed.parallel_loader as pl
 
     since = time.time()
     if is_early:
@@ -58,6 +62,9 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
             if phase == 'train':
                 model.train()  # Set model to training mode
             else:
+                if not xm.is_master_ordinal():
+                    continue
+                    
                 model.eval()  # Set model to evaluate mode
 
             epoch_loss = 0.0
@@ -65,8 +72,17 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                              'fp': defaultdict(int), 'fn': defaultdict(int)}
             mask_ratio = []  # just for fixmatch
 
+            # Create a pareallel loader
+            if cfg['use_tpu'] and phase == 'train':
+                # data_loaders[phase].sampler.set_epoch(epoch)
+
+                final_data_loader = pl.ParallelLoader(data_loaders[phase], [device]).per_device_loader(device)
+            else:
+                final_data_loader = data_loaders[phase]
+
+
             # Iterate over data.
-            for batch in data_loaders[phase]:
+            for batch in final_data_loader:
                 # Load batches
                 inputs_lb, labels = batch['img_lb'], batch['label']
                 inputs_lb = inputs_lb.to(device)
@@ -101,7 +117,11 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                     # backward + optimize only if in training phase
                     if phase == 'train':
                         loss.backward()
-                        optimizer.step()
+
+                        if cfg['use_tpu']:
+                            xm.optimizer_step(optimizer)
+                        else:
+                            optimizer.step()
 
                 # Calculate loss and metrics per the batch
                 if purpose == 'baseline' or phase == 'test':
@@ -110,15 +130,19 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                     epoch_loss += loss_lb.item() * inputs_lb.size(0) \
                                     + loss_ulb * lambda_u * inputs_ulb.size(0)
 
-                batch_metrics = update_batch_metrics(batch_metrics, preds, labels, class_names)
+                if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
+                    batch_metrics = update_batch_metrics(batch_metrics, preds, labels, class_names)
 
-            if phase == 'train':
-                scheduler.step()
+            # if phase == 'train':
+            #     scheduler.step()
 
             # Calcluate the metrics (e.g. Accuracy) per the epoch
-            epoch_metrics = get_epoch_metrics(epoch_loss, dataset_sizes, phase,
-                                              class_names, batch_metrics, metric_types)
-            print_metrics(epoch_metrics, metric_targets, print_to_file, phase=phase, mask_ratio=mask_ratio)
+            if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
+                epoch_metrics = get_epoch_metrics(epoch_loss, dataset_sizes, phase,
+                                                class_names, batch_metrics, metric_types)
+                print_metrics(epoch_metrics, metric_targets, cfg, phase=phase, mask_ratio=mask_ratio)
+
+            # Add prediction results per the epoch
             if phase != 'train':
                 epoch_metrics_list.append(epoch_metrics)
 
@@ -129,27 +153,33 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                 print("Early stopping!!")
                 break
 
-    # Set best metrics based on recent 5 epochs metrics
-    for metric_type in metric_types: # e.g. ['acc', 'ppv', ...]
-        for metric_target in metric_targets: # e.g. ['all', 'covid-19', ...]
-            # Accuracy couldn't calculate for each class
-            if metric_type == 'acc' and metric_target in class_names:
-                continue
+    if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train' and xm.is_master_ordinal():
+        # Extract best case index
+        best_acc = (-1, -1) # (idx, acc)
+        for e_met_idx, e_met in enumerate(epoch_metrics_list):
+            if e_met['acc']['all'] > best_acc[1]:
+                best_acc = ((e_met_idx, e_met['acc']['all']))
+        best_acc_idx = best_acc[0]
 
-            best_mean = np.array([em[metric_type][metric_target]
-                                    for em in epoch_metrics_list[-5:]]).mean()
-            best_std = np.array([em[metric_type][metric_target]
-                                for em in epoch_metrics_list[-5:]]).std()
-            best_metrics[metric_type][metric_target] = (best_mean, best_std)
+        # Set best metrics based on recent 5 epochs metrics
+        for metric_type in metric_types: # e.g. ['acc', 'ppv', ...]
+            for metric_target in metric_targets: # e.g. ['all', 'covid-19', ...]
+                # Accuracy couldn't calculate for each class
+                if metric_type == 'acc' and metric_target in class_names:
+                    continue
+                    
+                best_metrics[metric_type][metric_target] = \
+                    epoch_metrics_list[best_acc_idx][metric_type][metric_target]
 
-    print_metrics(best_metrics, metric_targets, print_to_file, phase='Best results')
+        print_metrics(best_metrics, metric_targets, cfg, phase='Best results')
+
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     print('-' * 20, '\n')
 
     return model, best_metrics
 
-def train_models(cfg):
+def train_models(index, cfg):
     '''Train models for fold times.
     
     Args:
@@ -164,33 +194,43 @@ def train_models(cfg):
     print = set_print_to_file(print, cfg)
 
     # Set parameters
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if cfg['use_tpu']:
+        # Acquires the (unique) Cloud TPU core corresponding to this process's index
+        import torch_xla.core.xla_model as xm
+        device = xm.xla_device()
+        print("Process", index ,"is using", xm.xla_real_devices([str(device)])[0])
+    else:
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     try:
         data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='val', cfg=cfg)
     except:
         data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='test', cfg=cfg)
-    mean_metrics = {m_type: defaultdict(tuple) for m_type in cfg['metric_types']}
+    mean_metrics = {m_type: defaultdict(list) for m_type in cfg['metric_types']}
     metric_targets = ['all'] + class_names
 
     # Train the models
-    trained_models = []
     for i in range(cfg['fold']):
         data_loaders, dataset_sizes, class_names = get_data_loaders(dataset_type='train', cfg=cfg,
                                                                     dataset_sizes=dataset_sizes,
                                                                     data_loaders=data_loaders, fold_id=i)
 
-        model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device, fine_tuning=True, scheduler='step')
+        model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device, fine_tuning=cfg['is_finetuning'],
+                                                                        scheduler=cfg['scheduler'], use_tpu=cfg['use_tpu'])
         model, metrics = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, i, class_names, metric_targets,
-                                     cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, cfg['print_to_file'],
-                                     num_epochs=cfg['epochs'], lambda_u=1.0, threshold=0.95, purpose=cfg['purpose'], is_early=False)
-        trained_models.append(model)
-        mean_metrics = update_mean_metrics(metric_targets, mean_metrics, metrics, status='training')
+                                     cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, cfg,
+                                     num_epochs=cfg['epochs'], lambda_u=cfg['lambda_u'], threshold=cfg['threshold'],
+                                     purpose=cfg['purpose'], is_early=False)
+
+        # save_model(model, cfg)
+        del model_ft, model
+        if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
+            mean_metrics = update_mean_metrics(metric_targets, mean_metrics, metrics, status='training')
 
     # Calculate mean metrics
-    mean_metrics = update_mean_metrics(metric_targets, mean_metrics, status='final', fold=cfg['fold'])
-    print_metrics(mean_metrics, metric_targets, cfg['print_to_file'], phase='Mean results')
-    
-    return trained_models
+    if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
+        mean_metrics = update_mean_metrics(metric_targets, mean_metrics, status='final', fold=cfg['fold'])
+        print_metrics(mean_metrics, metric_targets, cfg, phase='Mean results')
 
 
 class EarlyStopping:
