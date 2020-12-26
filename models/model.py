@@ -26,9 +26,9 @@ def get_model(device, iters,fine_tuning=True, scheduler='cos', step_size=7, use_
     '''
     # Get the pre-trained model
     model_ft = models.resnet50(pretrained=True)
-    if not fine_tuning:
+    if freeze_conv:
         for param in model_ft.parameters():
-            param.requires_grad = fine_tuning
+            param.requires_grad = False
             
     # Change fully connected layer
     num_ftrs = model_ft.fc.in_features
