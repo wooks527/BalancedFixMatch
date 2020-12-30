@@ -150,7 +150,7 @@ def get_data_loaders(dataset_type, cfg, dataset_sizes=None, data_loaders=None, f
                                           shuffle=True)
 
     data_loader = DataLoader(covid_data_loader, batch_size=cfg['batch_size'], num_workers=8,
-                             sampler=data_sampler, collate_fn=covid_data_loader.collate_fn, drop_last=True)
+                             sampler=data_sampler, collate_fn=covid_data_loader.collate_fn, drop_last=True if cfg['use_tpu'] else False)
     data_loaders[dataset_type] = data_loader
     
     return data_loaders, dataset_sizes, class_names

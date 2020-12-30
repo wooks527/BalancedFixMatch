@@ -6,3 +6,4 @@ results/
 *.pyc
 .vscode/
 __pycache__/
+shs/

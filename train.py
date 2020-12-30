@@ -29,7 +29,11 @@ if __name__ == '__main__':
     parser.add_argument('--use_tpu', action='store_true', help='whether you use tpus or not')
     parser.add_argument('--metric_types', type=str, nargs='+', default=['acc', 'ppv', 'recall', 'f1'], help='metric types')
     parser.add_argument('--dataset_types', type=str, nargs='+', default=['train', 'test'], help='dataset types')
-    parser.add_argument('--is_finetuning',action = 'store_true',help='whether fintunning or transfer learning')
+    parser.add_argument('--freeze_conv',action = 'store_true',help='whether fintunning or transfer learning')
+    parser.add_argument('--is_old_optimizer',action = 'store_true',help='whether old optimizer or new')
+    parser.add_argument('--lr', type=float, default=0.001, help = 'Learning rate of optimizer')
+    parser.add_argument('--momentum', type=float, default=0.9, help = 'Momentum of optimizer')
+    parser.add_argument('--weight_decay', type=float, default=5e-4, help = 'Weight decay of optimizer')
     cfg = vars(parser.parse_args())
     # Set the random seed
     random_seed = cfg['random_seed']
