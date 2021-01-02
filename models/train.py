@@ -220,13 +220,13 @@ def train_models(index, cfg):
         iters = int(np.ceil(dataset_sizes['train']/cfg['batch_size'])) * cfg['epochs']
         model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device,iters, freeze_conv=cfg['freeze_conv'],
                                                                         scheduler=cfg['scheduler'], use_tpu=cfg['use_tpu'],lr=cfg['lr'],momentum=cfg['momentum'],
-                                                                        weight_decay=cfg['weight_decay'],old_optimizer=cfg['is_old_optimizer'])
+                                                                        weight_decay=cfg['weight_decay'],old_optimizer=cfg['is_old_optimizer'],weight_path=cfg['weight_path'])
         model, metrics = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, i, class_names, metric_targets,
                                      cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, cfg,
                                      num_epochs=cfg['epochs'], lambda_u=cfg['lambda_u'], threshold=cfg['threshold'],
                                      purpose=cfg['purpose'], is_early=False)
 
-        # save_model(model, cfg)
+        #save_model(model, cfg,i)
         del model_ft, model
         if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
             mean_metrics = update_mean_metrics(metric_targets, mean_metrics, metrics, status='training')

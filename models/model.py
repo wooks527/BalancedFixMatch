@@ -11,7 +11,7 @@ from models.utils import *
 # cosine_annearing_with_warmup is referenced by below github repository.
 # https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup
 
-def get_model(device, iters,freeze_conv=False, scheduler='cos', step_size=7, use_tpu=False, lr=0.001,momentum=0.9,weight_decay=5e-4,old_optimizer=False):
+def get_model(device, iters,freeze_conv=False, scheduler='cos', step_size=7, use_tpu=False, lr=0.001,momentum=0.9,weight_decay=5e-4,old_optimizer=False,weight_path=None):
     '''Create and return the model based on ResNet-50.
     
     Args:
@@ -24,16 +24,21 @@ def get_model(device, iters,freeze_conv=False, scheduler='cos', step_size=7, use
         optimizer_ft (obj): the optimizer (e.g. Adam)
         exp_lr_scheduler (obj): the learning scheduler (e.g. Step decay)
     '''
-    # Get the pre-trained model
-    model_ft = models.resnet50(pretrained=True)
-    if freeze_conv:
+    if weight_path == '':
+        # Get the pre-trained model
+        model_ft = models.resnet50(pretrained=True)
+        if freeze_conv:
+            for param in model_ft.parameters():
+                param.requires_grad = False
+                
+        # Change fully connected layer
+        num_ftrs = model_ft.fc.in_features
+        model_ft.fc = nn.Linear(num_ftrs, 3)
+        model_ft = model_ft.to(device)
+    else:
+        model_ft = torch.load(weight_path).to(device)
         for param in model_ft.parameters():
-            param.requires_grad = False
-            
-    # Change fully connected layer
-    num_ftrs = model_ft.fc.in_features
-    model_ft.fc = nn.Linear(num_ftrs, 3)
-    model_ft = model_ft.to(device)
+                param.requires_grad = True
     
     # Set loss function, optimizer and learning scheduler
     criterion = nn.CrossEntropyLoss()
@@ -55,18 +60,18 @@ def get_model(device, iters,freeze_conv=False, scheduler='cos', step_size=7, use
                                                             T_0=5, T_mult=1,
                                                             eta_max=0.1, T_up=10)
         else:
-            exp_lr_scheduler = get_cosine_schedule_with_warmup(optimizer,
+            exp_lr_scheduler = get_cosine_schedule_with_warmup(optimizer_ft,
                                                         iters,
                                                         num_warmup_steps=iters*0)
 
     
     return model_ft, criterion, optimizer_ft, exp_lr_scheduler
 
-def save_model(trained_model, cfg):
+def save_model(trained_model, cfg,i):
     if not os.path.isdir(cfg['out_dir']):
         os.makedirs(cfg['out_dir'])
-
-    torch.save(model, f'{cfg["out_dir"]}/{cfg["purpose"]}/{cfg["purpose"]}_model_{i}.pt')
+    model_name = f"{cfg['purpose']}-nl{cfg['num_labeled']}-m{cfg['mu']}-b{cfg['batch_size']}-r{cfg['random_seed']}-th{cfg['threshold']}-lb{cfg['lambda_u']}-sc:{cfg['scheduler']}-lr{cfg['lr']}"
+    torch.save(trained_model, f'{cfg["out_dir"]}/{cfg["purpose"]}/{model_name}_model_{i}.pt')
 
 def load_model(cfg):
     model_dir = f'trained_models/{cfg["purpose"]}'
