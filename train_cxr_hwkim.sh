@@ -1,7 +1,7 @@
 images_dir="./data/CXR"
 data_dir="./data/CXR"
 
-epoch=20
+epoch=40
 num_labeled=100
 fold=3
 scheduler='step'
