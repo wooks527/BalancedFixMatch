@@ -1,7 +1,8 @@
 import torch
 import os
 from PIL import Image
-from datasets.transforms import get_data_transforms
+# from datasets.transforms import get_data_transforms
+from datasets.transforms_hwkim import get_data_transforms
 
 
 class CovidDataLoader(torch.utils.data.Dataset):
@@ -25,7 +26,8 @@ class CovidDataLoader(torch.utils.data.Dataset):
         self.cfg = cfg
         self.class_names = {0:'covid-19',1:'pneumonia',2:'normal'}
         self.name2label = {'covid-19':0,'pneumonia':1,'normal':2}
-        self.transformer = get_data_transforms(cfg['purpose'])
+        # self.transformer = get_data_transforms(cfg['purpose'])
+        self.transformer = get_data_transforms(cfg['purpose'], cfg['baseline_flag'])
         if 'train' != dataset_types:
             self.image_lb_paths,self.labels = self.load_text(os.path.join(cfg['data_dir'],'{}.txt'.format(dataset_types)))
             return

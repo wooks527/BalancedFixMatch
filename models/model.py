@@ -7,6 +7,7 @@ from torch.optim import lr_scheduler
 from torchvision import models
 from torchsummary import summary
 from models.cosine_annearing_with_warmup import CosineAnnealingWarmUpRestarts
+# from warmup_scheduler import GradualWarmupScheduler
 from models.utils import *
 # cosine_annearing_with_warmup is referenced by below github repository.
 # https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup
@@ -48,6 +49,7 @@ def get_model(device, iters,freeze_conv=False, scheduler='cos', step_size=7, use
     
     if scheduler == 'step':
         exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=step_size, gamma=0.1)
+        # exp_lr_scheduler = GradualWarmupScheduler(optimizer_ft, multiplier=1, total_epoch=5, after_scheduler=exp_lr_scheduler)
     else: 
         # cosine annealing
         if old_optimizer:
