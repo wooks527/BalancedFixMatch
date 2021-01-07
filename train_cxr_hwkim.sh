@@ -18,7 +18,7 @@ do
 				# for baseline_flag in {0..20}
 				# for baseline_flag in "16,9" "16,9,3"
 				# for baseline_flag in "13,9" "9,13" "13,9,7"
-				for baseline_flag in "9,14" "14,9" "9,14,3" "9,3,14" "14,9,3" "14,3,9" "3,9,14", "3,14,9"
+				for baseline_flag in "9,14" "14,9" "9,14,3" "9,3,14" "14,9,3" "14,3,9" "3,9,14" "3,14,9"
 				do
 					# Baseline
 					python train.py --purpose baseline \
