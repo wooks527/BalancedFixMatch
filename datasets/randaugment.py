@@ -105,7 +105,6 @@ def Solarize(img, v):  # [0, 256]
     assert 0 <= v <= 256
     return PIL.ImageOps.solarize(img, v)
 
-
 def Cutout(img, v):  # [0, 60] => percentage: [0, 0.2] => change to [0, 0.5]
     assert 0.0 <= v <= 0.5
     if v <= 0.:
@@ -113,7 +112,6 @@ def Cutout(img, v):  # [0, 60] => percentage: [0, 0.2] => change to [0, 0.5]
 
     v = v * img.size[0]
     return CutoutAbs(img, v)
-
 
 def CutoutAbs(img, v):  # [0, 60] => percentage: [0, 0.2]
     # assert 0 <= v <= 20
@@ -134,6 +132,10 @@ def CutoutAbs(img, v):  # [0, 60] => percentage: [0, 0.2]
     img = img.copy()
     PIL.ImageDraw.Draw(img).rectangle(xy, color)
     return img
+
+def Scale(img, v):
+    assert v >= 0
+    return PIL.ImageOps.scale(img, v)
 
 
 def augment_list():
@@ -174,6 +176,28 @@ def augment_list2():
     ]
     return l
 
+# COVID-Net
+# transforms.ColorJitter(brightness=(0.9, 1.1)),  # , contrast=(0.9, 1.1)),
+# transforms.RandomAffine(degrees=(-10,10), translate=(0.1, 0.1), scale=(0.85, 1.15)),
+def augment_list3():
+    l = [
+        (Identity, 0, 1),
+        (Brightness, 0.9, 1.1),
+        (Contrast, 0.9, 1.1),
+        (Color, 0.85, 0.95),
+        # (Equalize, 0, 1),
+        # (Posterize, 4, 8),
+        # (Sharpness, 0.05, 0.95),
+        # (ShearX, -0.3, 0.3),
+        # (ShearY, -0.3, 0.3),
+        # (Solarize, 0, 256),
+        (Rotate, -10, 10),
+        (TranslateX, -0.1, 0.1),
+        (TranslateY, -0.1, 0.1),
+        (Scale, 0.85, 1.15)
+    ]
+    return l
+
 
 class RandAugment:
     def __init__(self, n,is_cutmix=False,purpose='fixaug2'):
@@ -182,6 +206,8 @@ class RandAugment:
             self.augment_list = augment_list()
         elif purpose =='fixaug3':
             self.augment_list = augment_list2()
+        elif purpose == 'focal_loss':
+            self.augment_list = augment_list3()
 
         self.is_cutmix = is_cutmix
 

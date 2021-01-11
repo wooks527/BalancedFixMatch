@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.9, help = 'Momentum of optimizer')
     parser.add_argument('--weight_decay', type=float, default=5e-4, help = 'Weight decay of optimizer')
     parser.add_argument('--baseline_flag', type=str, default='0', help='Baseline flag for various transformations')
+    parser.add_argument('--gamma', type=float, default=1.0, help='gamma value for the focal loss')
     cfg = vars(parser.parse_args())
     # Set the random seed
     random_seed = cfg['random_seed']

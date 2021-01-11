@@ -112,7 +112,10 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                         probs_ulb, preds_ulb = torch.max(probs_ulb, 1)
                         mask = probs_ulb.ge(threshold).float()
 
-                        loss_ulb = (F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none') * mask).mean()
+                        # loss_ulb = (F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none') * mask).mean()
+                        loss_ulb = F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none')
+                        pt = torch.exp(-loss_ulb)
+                        loss_ulb = (((1-pt)**cfg['gamma'] * loss_ulb) * mask).mean()
                         mask_ratio.append(mask.mean().item())
                         loss += loss_ulb * lambda_u
 
