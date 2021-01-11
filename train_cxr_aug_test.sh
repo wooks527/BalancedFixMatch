@@ -33,7 +33,7 @@ do
 	    do
 	        for lambda_u in 1.0 #0.75 0.5
 	        do
-	            for gamma in 1.0 #2.0
+	            for gamma in 0.5 1.5 #1.0 #2.0
 				do
 					for threshold in 0.95
 					do

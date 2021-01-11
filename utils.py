@@ -4,7 +4,7 @@ def init_file_for_print(cfg):
     '''Init results.txt file.'''
     if not os.path.isdir('results/'):
             os.mkdir('results/')
-    fname = f"results/{cfg['purpose']}-nl{cfg['num_labeled']}-m{cfg['mu']}-b{cfg['batch_size']}-r{cfg['random_seed']}-th{cfg['threshold']}-lb{cfg['lambda_u']}-sc:{cfg['scheduler']}-lr{cfg['lr']}-bf{cfg['baseline_flag']}.txt"
+    fname = f"results/{cfg['purpose']}-nl{cfg['num_labeled']}-m{cfg['mu']}-fg{cfg['gamma']}-b{cfg['batch_size']}-r{cfg['random_seed']}-th{cfg['threshold']}-lb{cfg['lambda_u']}-sc:{cfg['scheduler']}-lr{cfg['lr']}-bf{cfg['baseline_flag']}.txt"
     with open(fname, 'w'):
         pass
 
@@ -19,7 +19,7 @@ def set_print_to_file(print, cfg):
         nothing
     '''
     if cfg['print_to_file']:
-        fname = f"results/{cfg['purpose']}-nl{cfg['num_labeled']}-m{cfg['mu']}-b{cfg['batch_size']}-r{cfg['random_seed']}-th{cfg['threshold']}-lb{cfg['lambda_u']}-sc:{cfg['scheduler']}-lr{cfg['lr']}-bf{cfg['baseline_flag']}.txt"
+        fname = f"results/{cfg['purpose']}-nl{cfg['num_labeled']}-m{cfg['mu']}-fg{cfg['gamma']}-b{cfg['batch_size']}-r{cfg['random_seed']}-th{cfg['threshold']}-lb{cfg['lambda_u']}-sc:{cfg['scheduler']}-lr{cfg['lr']}-bf{cfg['baseline_flag']}.txt"
         def file_print(func):
             def wrapped_func(*args,**kwargs):
                 kwargs['file'] = open(fname, 'a')
