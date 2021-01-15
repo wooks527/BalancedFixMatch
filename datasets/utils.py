@@ -43,6 +43,10 @@ def create_datasets(cfg, image_data_dir=None):
         os.makedirs(cfg['data_dir'])
 
     for dataset_type in cfg['dataset_types']:
+        if False or 'test' in dataset_type: # 임시로 test dataset 생성 안하려고 만듦 (추후 수정 필요)
+            print(f'{dataset_type} dataset is already exists.')
+            continue
+
         image_paths = [glob.glob(os.path.join(image_data_dir,dataset_type,cls_name,'*')) for cls_name in cfg['class_name']]
         
         for i, cls_name in enumerate(cfg['class_name']): # Check folder.
@@ -99,13 +103,21 @@ def make_train_fold(cfg,image_paths):
             all_image_paths += im_path
             labeled_image_paths.append(np.random.choice(im_path,cfg['num_labeled'],replace=False)) # Random choice image per class.
 
-        file_name = os.path.join(cfg['data_dir'] , f'train_lb_{n}.txt')
-        with open(file_name, 'w') as f:
-            for i in range(cfg['num_labeled']):
-                for j,cls_name in enumerate(cfg['class_name']):
-                    f.writelines(labeled_image_paths[j][i] + " " + cls_name+ "\n")
-                    all_image_paths.remove(labeled_image_paths[j][i]) # Delete to avoid duplication.
-        print('"train_lb_{}.txt" created in {}'.format(n,cfg['data_dir']))
+        if False: # 추후에 Seperate 하는 방법 정리할 때 다시 수정 필요 (이미 Labeled data가 있는 경우, Unlabeled data만 생성하는 것과 관련된 코드임)
+            file_name = os.path.join(cfg['data_dir'] , f'train_lb_{n}.txt')
+            print(f'train_lb_{n}.txt is already exists.')
+            with open(file_name, 'r') as f:
+                for image_path_info in f.read().splitlines():
+                    image_path, _ = image_path_info.split()
+                    all_image_paths.remove(image_path)
+        else:
+            file_name = os.path.join(cfg['data_dir'] , f'train_lb_{n}.txt')
+            with open(file_name, 'w') as f:
+                for i in range(cfg['num_labeled']):
+                    for j,cls_name in enumerate(cfg['class_name']):
+                        f.writelines(labeled_image_paths[j][i] + " " + cls_name+ "\n")
+                        all_image_paths.remove(labeled_image_paths[j][i]) # Delete to avoid duplication.
+            print('"train_lb_{}.txt" created in {}'.format(n,cfg['data_dir']))
 
         unlabeled_image_paths = np.random.choice(all_image_paths,unlabeled_image_num,replace=False)
         file_name = os.path.join(cfg['data_dir'], f'train_ulb_{n}.txt')

@@ -111,10 +111,22 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                         probs_ulb = torch.softmax(outputs_ulb, dim=-1)
                         probs_ulb, preds_ulb = torch.max(probs_ulb, 1)
                         mask = probs_ulb.ge(threshold).float()
-
-                        loss_ulb = (F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none') * mask).mean()
-                        mask_ratio.append(mask.mean().item())
-                        loss += loss_ulb * lambda_u
+                        if cfg['sharpening']: # using sharpening
+                            # https://github.com/LeeDoYup/FixMatch-pytorch/blob/0e0b492f1cb110a43c765c55105b5f94c13f45fd/models/fixmatch/fixmatch_utils.py#L35
+                            sharpen_output = torch.softmax(outputs_ulb/cfg['temperature'], dim=-1)
+                            log_pred = F.log_softmax(outputs_ulb_wa, dim=-1)
+                            loss_sharpen = (torch.sum(-sharpen_output*log_pred, dim=1) * mask).mean()
+                            loss += loss_sharpen * lambda_u
+                        else : # pseudo label
+                            if cfg['focal_loss']: # Focal loss
+                                loss_ulb = F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none')
+                                pt = torch.exp(-loss_ulb)
+                                loss_ulb = (((1-pt)**cfg['gamma'] * loss_ulb) * mask).mean()
+                            else: # Previous loss
+                                loss_ulb = (F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none') * mask).mean()
+                            
+                            mask_ratio.append(mask.mean().item())
+                            loss += loss_ulb * lambda_u
 
                     # backward + optimize only if in training phase
                     if phase == 'train':

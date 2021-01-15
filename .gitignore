@@ -7,3 +7,4 @@ results/
 .vscode/
 __pycache__/
 shs/
+colab_codes/
