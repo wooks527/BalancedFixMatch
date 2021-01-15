@@ -122,7 +122,6 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                                 loss_ulb = F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none')
                                 pt = torch.exp(-loss_ulb)
                                 loss_ulb = (((1-pt)**cfg['gamma'] * loss_ulb) * mask).mean()
-                                loss_ulb = (F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none') * mask).mean()
                             else: # Previous loss
                                 loss_ulb = (F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none') * mask).mean()
                             
