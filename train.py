@@ -43,7 +43,7 @@ if __name__ == '__main__':
     # Set the random seed
     random_seed = cfg['random_seed']
     set_random_seed(random_seed)
-    
+
     # Set print's output stream to the file
     if cfg['print_to_file']:
         from utils import init_file_for_print
