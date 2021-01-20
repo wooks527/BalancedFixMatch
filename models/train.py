@@ -113,10 +113,21 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                         mask = probs_ulb.ge(threshold).float()
                         if cfg['sharpening']: # using sharpening
                             # https://github.com/LeeDoYup/FixMatch-pytorch/blob/0e0b492f1cb110a43c765c55105b5f94c13f45fd/models/fixmatch/fixmatch_utils.py#L35
-                            sharpen_output = torch.softmax(outputs_ulb/cfg['temperature'], dim=-1)
-                            log_pred = F.log_softmax(outputs_ulb_wa, dim=-1)
-                            loss_sharpen = (torch.sum(-sharpen_output*log_pred, dim=1) * mask).mean()
-                            loss += loss_sharpen * lambda_u
+                            # sharpen_output = torch.softmax(outputs_ulb/cfg['temperature'], dim=-1)
+                            # log_pred = F.log_softmax(outputs_ulb_wa, dim=-1)
+                            # loss_sharpen = (torch.sum(-sharpen_output*log_pred, dim=1) * mask).mean()
+                            if cfg['focal_loss']:
+                                sharpen_probs_ulb = torch.softmax(outputs_ulb/cfg['temperature'], dim=-1)
+                                log_pred = F.log_softmax(outputs_ulb_wa, dim=-1)
+                                loss_ulb = torch.sum(-sharpen_probs_ulb*log_pred, dim=1)
+                                pt = torch.exp(-loss_ulb)
+                                loss_ulb = (((1-pt)**cfg['gamma'] * loss_ulb)).mean()
+                            else:
+                                sharpen_label = torch.softmax(outputs_ulb/cfg['temperature'], dim=-1)
+                                log_pred = F.log_softmax(outputs_ulb_wa, dim=-1)
+                                loss_ulb = torch.sum(-sharpen_probs_ulb*log_pred, dim=1).mean()
+
+                            loss += loss_ulb * lambda_u
                         else : # pseudo label
                             if cfg['focal_loss']: # Focal loss
                                 loss_ulb = F.cross_entropy(outputs_ulb_wa, preds_ulb, reduction='none')
@@ -147,7 +158,7 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                 if not cfg['use_tpu'] or cfg['use_tpu'] and phase != 'train':
                     batch_metrics = update_batch_metrics(batch_metrics, preds, labels, class_names)
 
-            if phase == 'train':
+            if phase == 'train' and scheduler:
                 scheduler.step()
 
             # Calcluate the metrics (e.g. Accuracy) per the epoch
@@ -231,8 +242,11 @@ def train_models(index, cfg):
         
         iters = int(np.ceil(dataset_sizes['train']/cfg['batch_size'])) * cfg['epochs']
         model_ft, criterion, optimizer_ft, exp_lr_scheduler = get_model(device,iters, freeze_conv=cfg['freeze_conv'],
-                                                                        scheduler=cfg['scheduler'], use_tpu=cfg['use_tpu'],lr=cfg['lr'],momentum=cfg['momentum'],
-                                                                        weight_decay=cfg['weight_decay'],old_optimizer=cfg['is_old_optimizer'])
+                                                                        scheduler=cfg['scheduler'], use_tpu=cfg['use_tpu'],
+                                                                        lr=cfg['lr'], momentum=cfg['momentum'],
+                                                                        weight_decay=cfg['weight_decay'],
+                                                                        old_optimizer=cfg['is_old_optimizer'],
+                                                                        opt=cfg['opt'])
         model, metrics = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, i, class_names, metric_targets,
                                      cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, cfg,
                                      num_epochs=cfg['epochs'], lambda_u=cfg['lambda_u'], threshold=cfg['threshold'],
