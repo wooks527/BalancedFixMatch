@@ -6,6 +6,7 @@ import os
 from torch.optim import lr_scheduler
 from torchvision import models
 from torchsummary import summary
+# from adabelief_pytorch import AdaBelief
 from models.cosine_annearing_with_warmup import CosineAnnealingWarmUpRestarts
 # from warmup_scheduler import GradualWarmupScheduler
 from models.utils import *
@@ -14,7 +15,7 @@ from models.utils import *
 
 def get_model(device, iters,freeze_conv=False, scheduler='cos', step_size=7,
               use_tpu=False, lr=0.001, momentum=0.9, weight_decay=5e-4,
-              old_optimizer=False, opt='SGD'):
+              old_optimizer=False, opt='SGD', nestrov=True):
     '''Create and return the model based on ResNet-50.
     
     Args:
@@ -48,9 +49,14 @@ def get_model(device, iters,freeze_conv=False, scheduler='cos', step_size=7,
         if old_optimizer:
             optimizer_ft = optim.SGD(model_ft.parameters(), lr=lr, momentum=momentum)
         else:
-            optimizer_ft = get_SGD(model_ft, 'SGD', lr, momentum, weight_decay)
-    else: # Adam
+            optimizer_ft = get_SGD(model_ft, 'SGD', lr, momentum, weight_decay, nestrov)
+    elif opt == 'Adam':
         optimizer_ft = optim.Adam(model_ft.parameters(), lr=lr)
+    else: # Adabelief
+        assert False, 'You should select an optimizer.'
+        # optimizer_ft = AdaBelief(model_ft.parameters(), lr=lr, eps=1e-8, betas=(0.9,0.999),
+        #                          weight_decay=0, amsgrad=False, weight_decouple=False,
+        #                          fixed_decay=False, rectify=False)
     
     if scheduler == 'step':
         exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=step_size, gamma=0.1)

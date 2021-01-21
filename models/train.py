@@ -246,7 +246,7 @@ def train_models(index, cfg):
                                                                         lr=cfg['lr'], momentum=cfg['momentum'],
                                                                         weight_decay=cfg['weight_decay'],
                                                                         old_optimizer=cfg['is_old_optimizer'],
-                                                                        opt=cfg['opt'])
+                                                                        opt=cfg['opt'], nestrov=cfg['nestrov'])
         model, metrics = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, i, class_names, metric_targets,
                                      cfg['metric_types'], cfg['dataset_types'], data_loaders, dataset_sizes, device, cfg,
                                      num_epochs=cfg['epochs'], lambda_u=cfg['lambda_u'], threshold=cfg['threshold'],
