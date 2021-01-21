@@ -2,7 +2,7 @@ images_dir="/mnt/f/CXR"
 
 epoch=20
 fold=4
-scheduler='step'
+scheduler='cosine'
 
 for num_labeled in 100 150
 do

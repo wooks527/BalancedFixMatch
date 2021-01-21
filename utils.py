@@ -34,13 +34,6 @@ def set_print_to_file(print, cfg):
 
 
 
-
-
-
-
-
-
-
 def create_experiment_data(cfg):
     if cfg['images_dir'] == None:
         cfg['images_dir'] = cfg['data_dir']
@@ -56,7 +49,7 @@ def create_experiment_data(cfg):
         image_paths = [glob.glob(os.path.join(cfg['images_dir'],dataset_type,cls_name,'*')) for cls_name in cfg['class_name']]
         for i in range(len(image_paths)):
             for j in range(len(image_paths[i])):
-                image_paths[i][j]= image_paths[i][j].replace('\\','/')#os.path.normpath(image_paths[i][j])
+                image_paths[i][j]= image_paths[i][j].replace('\\','/')
                
 
         for i, cls_name in enumerate(cfg['class_name']): # Check folder.
@@ -66,46 +59,48 @@ def create_experiment_data(cfg):
             for i in range(cfg['fold']):
                 info=[dict() for _ in range(len(cfg['experiment_numlabel']))]
                 all_image_paths = copy.deepcopy(image_paths)
-                # init pivot info
-                info[0]['train_lb']=dict()
-                for cls_name in cfg['class_name']:
-                    info[0]['train_lb'][cls_name] = []
-                info[0]['train_ulb'] = dict()
-                info[0]['train_ulb'][cfg['experiment_mu'][0]]=[]
 
-                # check pivot
-                if os.path.exists(os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][0]}",f"{cfg['experiment_mu'][0]}" ,f"train_lb_{i}.txt")):
-                    # Read labeled data pivot
-                    f = open(os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][0]}",f"{cfg['experiment_mu'][0]}" ,f"train_lb_{i}.txt"),'r')
-                    lines = f.readlines()
-                    f.close()
-                    
-                    for line in lines:
-                        line = line.rstrip('\n').split()
-                        all_image_paths[cls2id[line[1]]].remove(line[0])
-                        info[0]['train_lb'][line[1]].append(line[0])
-                        
+                # init data
+                for j in range(len(cfg['experiment_numlabel'])):
+                    info[j]['train_lb']=dict()
+                    for cls_name in cfg['class_name']:
+                        info[j]['train_lb'][cls_name] = []
+    
+                    info[j]['train_ulb'] = dict()
                     for m in range(len(cfg['experiment_mu'])):
-                        if not os.path.exists(os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][0]}",f"{cfg['experiment_mu'][m]}")):
-                            os.makedirs(os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][0]}",f"{cfg['experiment_mu'][m]}"))
-
-                        with open(os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][0]}",f"{cfg['experiment_mu'][m]}" ,f"train_lb_{i}.txt"),'w') as f:
+                        info[j]['train_ulb'][cfg['experiment_mu'][m]]=[]
+                
+                # load fixed data
+                for j in range(len(cfg['fixed_numlabel'])): 
+                    for m in range(len(cfg['fixed_mu'])):
+                        assert os.path.exists(os.path.join(cfg['data_dir'],f"nl{cfg['fixed_numlabel'][j]}",f"{cfg['fixed_mu'][m]}" ,f"train_lb_{i}.txt"))
+                        assert os.path.exists(os.path.join(cfg['data_dir'],f"nl{cfg['fixed_numlabel'][j]}",f"{cfg['fixed_mu'][m]}" ,f"train_ulb_{i}.txt"))
+                        f = open(os.path.join(cfg['data_dir'],f"nl{cfg['fixed_numlabel'][j]}",f"{cfg['fixed_mu'][m]}" ,f"train_lb_{i}.txt"),'r')
+                        lines = f.readlines()
+                        f.close()
+                        
+                        if m == len(cfg['fixed_mu'])-1:
                             for line in lines:
-                                f.writelines(line)
+                                line = line.rstrip('\n').split()
+                                if j==len(cfg['fixed_numlabel'])-1:
+                                    all_image_paths[cls2id[line[1]]].remove(line[0])
+                                info[j]['train_lb'][line[1]].append(line[0])
+                        
+                        f = open(os.path.join(cfg['data_dir'],f"nl{cfg['fixed_numlabel'][j]}",f"{cfg['fixed_mu'][m]}" ,f"train_ulb_{i}.txt"),'r')
+                        lines = f.readlines()
+                        f.close()
                     
-                    # Read unlabeled data pivot
-                    f = open(os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][0]}",f"{cfg['experiment_mu'][0]}" ,f"train_ulb_{i}.txt"),'r')
-                    lines = f.readlines()
-                    f.close()
-                    
-                    for line in lines:
-                        line = line.rstrip('\n')
-                        for cls_name in cfg['class_name']:
-                            if cls_name in line:
-                                all_image_paths[cls2id[cls_name]].remove(line)
-                                break
-                        info[0]['train_ulb'][cfg['experiment_mu'][0]].append(line)
-                else:
+                        for line in lines:
+                            line = line.rstrip('\n')
+                            if j==len(cfg['fixed_numlabel'])-1 and m == len(cfg['fixed_mu'])-1:
+                                for cls_name in cfg['class_name']:
+                                    if cls_name in line:
+                                        all_image_paths[cls2id[cls_name]].remove(line)
+                                        break
+                            info[j]['train_ulb'][cfg['fixed_mu'][m]].append(line)
+                        print(f"Load train_ulb nl = {cfg['fixed_numlabel'][j]}, mu = {cfg['fixed_mu'][m]}")8
+
+                if not os.path.exists(os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][0]}",f"{cfg['experiment_mu'][0]}" ,f"train_lb_{i}.txt")):
                     print("There is no pivot file")
                     # Make labeled data pivot
                     for c,cls_name in enumerate(cfg['class_name']):
@@ -123,27 +118,30 @@ def create_experiment_data(cfg):
                                 for cls_name in cfg['class_name']:
                                     im_path = info[0]['train_lb'][cls_name][n]
                                     f.writelines(im_path + " " + cls_name+ "\n")
-                    print('"{}.txt" created in {}'.format(f"train_lb_{i}.txt",os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][0]}",f"{cfg['experiment_mu'][m]}")))
+                    print('"{}" created in {}'.format(f"train_lb_{i}.txt",os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][0]}",f"{cfg['experiment_mu'][m]}")))
 
                 
                 # Make labeled data
-                for j in range(1,len(cfg['experiment_numlabel'])):
-                    info[j]['train_lb']=dict()
-
-                    for c,cls_name in enumerate(cfg['class_name']):
-                        info[j]['train_lb'][cls_name] = []
-                        need_num = cfg['experiment_numlabel'][j]-cfg['experiment_numlabel'][j-1]
-                        choiced_paths = list(np.random.choice(all_image_paths[c],need_num,replace=False))
-                        
-                        for im_path in choiced_paths:
-                            all_image_paths[c].remove(im_path)
+                for j in range(len(cfg['experiment_numlabel'])):
+                    
+                    if not len(info[j]['train_lb'][cfg['class_name'][0]]):
+                        for c,cls_name in enumerate(cfg['class_name']):
+                            need_num = cfg['experiment_numlabel'][j]-cfg['experiment_numlabel'][j-1]
+                            choiced_paths = list(np.random.choice(all_image_paths[c],need_num,replace=False))
                             
-                        choiced_paths = info[j-1]['train_lb'][cls_name] + choiced_paths
+                            for im_path in choiced_paths:
+                                all_image_paths[c].remove(im_path)
+                                
+                            choiced_paths = info[j-1]['train_lb'][cls_name] + choiced_paths
 
-                        for im_path in choiced_paths:
-                            info[j]['train_lb'][cls_name].append(im_path)
+                            for im_path in choiced_paths:
+                                info[j]['train_lb'][cls_name].append(im_path)
+                                          
 
                     for m in range(len(cfg['experiment_mu'])):
+                        if os.path.exists(os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][j]}",f"{cfg['experiment_mu'][m]}" ,f"train_lb_{i}.txt")):
+                            continue
+
                         if not os.path.exists(os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][j]}",f"{cfg['experiment_mu'][m]}")):
                             os.makedirs(os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][j]}",f"{cfg['experiment_mu'][m]}"))
 
@@ -152,7 +150,7 @@ def create_experiment_data(cfg):
                                 for cls_name in cfg['class_name']:
                                     im_path = info[j]['train_lb'][cls_name][n]
                                     f.writelines(im_path + " " + cls_name+ "\n")
-                        print('"{}.txt" created in {}'.format(f"train_lb_{i}.txt",os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][j]}",f"{cfg['experiment_mu'][m]}")))
+                        print('"{}" created in {}'.format(f"train_lb_{i}.txt",os.path.join(cfg['data_dir'],f"nl{cfg['experiment_numlabel'][j]}",f"{cfg['experiment_mu'][m]}")))
 
 
                 # Convert txt per class to all txt
@@ -176,12 +174,10 @@ def create_experiment_data(cfg):
                 
                 # Make unlabeled data
                 for j in range(len(cfg['experiment_numlabel'])):
-                    if 'train_ulb' not in info[j].keys():
-                        info[j]['train_ulb'] = dict()
 
                     for m in range(len(cfg['experiment_mu'])):
-                        if j ==0 and m== 0: continue
-                        info[j]['train_ulb'][cfg['experiment_mu'][m]]=[]
+                        if len(info[j]['train_ulb'][cfg['experiment_mu'][m]]): continue
+
                         if j==0:
                             pre_list = info[j]['train_ulb'][cfg['experiment_mu'][m-1]]
                         elif m==0:
@@ -206,6 +202,7 @@ def create_experiment_data(cfg):
             for num_label in cfg['experiment_numlabel']:
                 for mu in cfg['experiment_mu']:
                     folder = os.path.join(cfg['data_dir'],f"nl{num_label}",f"{mu}")
+                    if os.path.exists(os.path.join(folder, '{}.txt'.format(dataset_type))): continue
                     if not os.path.exists(folder):
                         os.makedirs(folder)
 
@@ -214,7 +211,6 @@ def create_experiment_data(cfg):
                             for im_path in image_paths[i]:
                                 f.writelines(im_path + " " + cls_name+ "\n")
                     print('"{}.txt" created in {}'.format(dataset_type,folder))
-
 
 
 if __name__ == '__main__':
@@ -233,6 +229,9 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_types', type=str, nargs='+', default=['train', 'test'], help='dataset types')
     parser.add_argument('--experiment_numlabel', type=int, nargs='+',default=[25,50,100,150], help='')
     parser.add_argument('--experiment_mu', type=int, nargs='+',default=[1,2,3], help='')
+    parser.add_argument('--fixed_numlabel', type=int, nargs='+',default=[0], help='')
+    parser.add_argument('--fixed_mu', type=int, nargs='+',default=[0], help='')
     cfg = vars(parser.parse_args())
+    print(cfg)
     create_experiment_data(cfg)
     exit()

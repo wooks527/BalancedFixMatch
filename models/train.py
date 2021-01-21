@@ -103,6 +103,7 @@ def train_model(model, criterion, optimizer, scheduler, i, class_names, metric_t
                         del outputs
                     else:
                         outputs_lb = outputs
+                
                     _, preds = torch.max(outputs_lb, 1)
                     loss = loss_lb = criterion(outputs_lb, labels)
                     
