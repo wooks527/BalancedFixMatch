@@ -14,12 +14,6 @@ def get_data_transforms(purpose='baseline'):
     if purpose == 'baseline':
         data_transforms = {
             'train': transforms.Compose([
-                # transforms.RandomAffine(degrees=0, scale=(0.9, 1.1)), # bf13 (nl50)
-                # transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)), # bf9 (nl100)
-                # transforms.RandomAffine(degrees=0, scale=(0.9, 1.1)), # bf13 (nl150)
-                # transforms.ColorJitter(brightness=(0.9, 1.1), contrast=(0.9, 1.1)),
-                # transforms.RandomAffine(degrees=(-5, 5), translate=(0.1, 0.1), scale=(0.95, 1.05)),
-                transforms.RandomAffine(degrees=0, translate=(0.125, 0.125)),
                 transforms.RandomHorizontalFlip(p=0.5),
                 transforms.Resize(256),
                 transforms.CenterCrop(224),
@@ -42,7 +36,6 @@ def get_data_transforms(purpose='baseline'):
     elif purpose == 'fixmatch': # FixMatch (직관)
         data_transforms = {
             'train_lb': transforms.Compose([
-                transforms.RandomAffine(degrees=0, translate=(0.125, 0.125)),
                 transforms.RandomHorizontalFlip(p=0.5),
                 transforms.Resize(256),
                 transforms.CenterCrop(224),
@@ -50,7 +43,6 @@ def get_data_transforms(purpose='baseline'):
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
             ]),
             'train_ulb': transforms.Compose([
-                transforms.RandomAffine(degrees=0, translate=(0.125, 0.125)),
                 transforms.RandomHorizontalFlip(p=0.5),
                 transforms.Resize(256),
                 transforms.CenterCrop(224),

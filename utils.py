@@ -4,7 +4,7 @@ def init_file_for_print(cfg):
     '''Init results.txt file.'''
     if not os.path.isdir('results/'):
             os.mkdir('results/')
-    fname = f"results/{cfg['purpose']}-nl{cfg['num_labeled']}-m{cfg['mu']}-fg{cfg['gamma']}-b{cfg['batch_size']}-r{cfg['random_seed']}-th{cfg['threshold']}-lb{cfg['lambda_u']}-sc:{cfg['scheduler']}-lr{cfg['lr']}-bf{cfg['baseline_flag']}.txt"
+    fname = f"results/{cfg['purpose']}-b{cfg['batch_size']}-nl{cfg['num_labeled']}-m{cfg['mu']}-lb{cfg['lambda_u']}-th{cfg['threshold']}-sharp{cfg['sharpening']}-T{cfg['temperature']}-focal{cfg['focal_loss']}-fg{cfg['gamma']}-opt{cfg['opt']}-lr{cfg['lr']}-mom{cfg['momentum']}-sc:{cfg['scheduler']}-r{cfg['random_seed']}.txt"
     with open(fname, 'w'):
         pass
 
@@ -19,7 +19,7 @@ def set_print_to_file(print, cfg):
         nothing
     '''
     if cfg['print_to_file']:
-        fname = f"results/{cfg['purpose']}-nl{cfg['num_labeled']}-m{cfg['mu']}-fg{cfg['gamma']}-b{cfg['batch_size']}-r{cfg['random_seed']}-th{cfg['threshold']}-lb{cfg['lambda_u']}-sc:{cfg['scheduler']}-lr{cfg['lr']}-bf{cfg['baseline_flag']}.txt"
+        fname = f"results/{cfg['purpose']}-b{cfg['batch_size']}-nl{cfg['num_labeled']}-m{cfg['mu']}-lb{cfg['lambda_u']}-th{cfg['threshold']}-sharp{cfg['sharpening']}-T{cfg['temperature']}-focal{cfg['focal_loss']}-fg{cfg['gamma']}-opt{cfg['opt']}-lr{cfg['lr']}-mom{cfg['momentum']}-sc:{cfg['scheduler']}-r{cfg['random_seed']}.txt"
         def file_print(func):
             def wrapped_func(*args,**kwargs):
                 kwargs['file'] = open(fname, 'a')

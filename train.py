@@ -39,6 +39,8 @@ if __name__ == '__main__':
     parser.add_argument('--sharpening', action = 'store_true', help='whether you use sharpening or pseudo label')
     parser.add_argument('--gamma', type=float, default=1.0, help='gamma value for the focal loss')
     parser.add_argument('--temperature', type=float, default=1.0, help='temperature value for the sharpening')
+    parser.add_argument('--opt', type=str, default='SGD', help='optimizer')
+    parser.add_argument('--nestrov', type=bool, default=True, help='SGD option')
     cfg = vars(parser.parse_args())
     # Set the random seed
     random_seed = cfg['random_seed']

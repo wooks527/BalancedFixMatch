@@ -1,7 +1,7 @@
 images_dir="/mnt/f/CXR"
 
 epoch=20
-fold=4
+fold=3
 scheduler='step'
 
 for num_labeled in 100 150
@@ -28,7 +28,7 @@ do
 							--print_to_file \
 							--metric_types acc ppv recall f1 \
 							--dataset_types train test
-			for mu in 1 2 3
+			for mu in 1 #2 3
 			do
 				for lambda_u in 1.0 #0.75 0.5
 				do
