@@ -15,7 +15,7 @@ BalancedFixMatch is the model to classify COVID-19 based on Chest X-ray images.
   * [COVIDx-CXR dataset](https://github.com/lindawangg/COVID-Net/blob/master/docs/COVIDx.md)
 
 
-## How to train or test AVIDNet
+## How to train or test BalancedFixMatch
 
 These are tutorials for training or test BalancedFixMatch using CXR images:
 
