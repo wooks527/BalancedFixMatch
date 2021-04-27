@@ -1,9 +1,7 @@
 import torch
 import os
 from PIL import Image
-# from datasets.transforms import get_data_transforms
-from datasets.transforms_aug_test import get_data_transforms
-# from datasets.transforms_hwkim import get_data_transforms
+from datasets.transforms import get_data_transforms
 
 
 class CovidDataLoader(torch.utils.data.Dataset):
