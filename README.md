@@ -1,11 +1,7 @@
-AVIDNet-Util_Dev
+BalancedFixMatch
 ========
 
-AVIDNet is the model to classify COVID-19 based on Chest X-ray or CT images.
-
-## Detail of change
-
-[Link](https://www.notion.so/Util-363be4a8343347f282ea410b52a94cec)
+BalancedFixMatch is the model to classify COVID-19 based on Chest X-ray images.
 
 ## Requirements
 
@@ -23,5 +19,5 @@ AVIDNet is the model to classify COVID-19 based on Chest X-ray or CT images.
 
 These are tutorials for training or test AVIDNet using CXR images:
 
-* [Train and test AVIDNet](train.ipynb)
+* [Train and test BalancedFixMatch](train.ipynb)
 
