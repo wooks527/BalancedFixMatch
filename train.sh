@@ -1,72 +1,103 @@
-for random_seed in {0..2} # for random seed
+images_dir="./data/CXR"
+
+epoch=20
+fold=4
+scheduler='step'
+# scheduler='cos'
+
+for num_labeled in 50
 do
-    for mu in 6 4 2
-    do
-        python train.py --purpose baseline \
-                        --images_dir /mnt/e/00.dataset/CT \
-                        --data_dir ./data/CT/$mu \
-                        --num_labeled 25 \
-                        --mu $mu \
-                        --fold 5 \
-                        --epochs 20 \
-                        --batch_size 8 \
-                        --random_seed $random_seed \
-                        --print_to_file \
-                        --metric_types acc ppv recall f1 \
-                        --dataset_types train val
+	data_dir="./data/CXR/imbalance_sample/nl$num_labeled"
+	for random_seed in 0 1 2 3
+	do
+		for batch_size in 16
+		do
+			for mu in 1 #2 3
+			do
+                # Baseline
+                python train.py --purpose baseline \
+                                --images_dir $images_dir \
+                                --data_dir $data_dir/$mu \
+                                --fold $fold \
+                                --epochs $epoch \
+                                --batch_size $batch_size \
+                                --num_labeled $num_labeled \
+                                --mu $mu \
+                                --scheduler $scheduler \
+                                --random_seed $random_seed \
+                                --print_to_file \
+                                --metric_types acc ppv recall f1 \
+                                --dataset_types train test
 
-        python train.py --purpose fixmatch \
-                        --images_dir /mnt/e/00.dataset/CT \
-                        --data_dir ./data/CT/$mu \
-                        --num_labeled 25 \
-                        --mu $mu \
-                        --fold 5 \
-                        --epochs 20 \
-                        --batch_size 8 \
-                        --random_seed $random_seed \
-                        --print_to_file \
-                        --metric_types acc ppv recall f1 \
-                        --dataset_types train val
-    done
+				for lambda_u in 1.0
+				do
+					for gamma in 0.5
+					do
+						for threshold in 0.95
+						do
+                            # FixMatch Only
+                            python train.py --purpose fixmatch \
+                                            --images_dir $images_dir \
+                                            --data_dir $data_dir/$mu \
+                                            --fold $fold \
+                                            --epochs $epoch \
+                                            --batch_size $batch_size \
+                                            --num_labeled $num_labeled \
+                                            --mu $mu \
+                                            --lambda_u $lambda_u \
+                                            --threshold $threshold \
+                                            --scheduler $scheduler \
+                                            --random_seed $random_seed \
+                                            --print_to_file \
+                                            --metric_types acc ppv recall f1 \
+                                            --dataset_types train test
+
+                            # FixMatch with Focal Loss
+                            python train.py --purpose fixmatch \
+                                            --images_dir $images_dir \
+                                            --data_dir $data_dir/$mu \
+                                            --fold $fold \
+                                            --epochs $epoch \
+                                            --batch_size $batch_size \
+                                            --num_labeled $num_labeled \
+                                            --mu $mu \
+                                            --lambda_u $lambda_u \
+                                            --threshold $threshold \
+                                            --focal_loss \
+                                            --gamma $gamma \
+                                            --scheduler $scheduler \
+                                            --random_seed $random_seed \
+                                            --print_to_file \
+                                            --metric_types acc ppv recall f1 \
+                                            --dataset_types train test
+
+                            # FixMatch with Focal Loss and Sharpening
+							for temperature in 0.9 0.5
+							do
+								python train.py --purpose fixmatch \
+												--images_dir $images_dir \
+												--data_dir $data_dir/$mu \
+												--fold $fold \
+												--epochs $epoch \
+												--batch_size $batch_size \
+												--num_labeled $num_labeled \
+												--mu $mu \
+												--lambda_u $lambda_u \
+												--threshold $threshold \
+												--sharpening \
+												--temperature $temperature \
+												--focal_loss \
+												--gamma $gamma \
+												--scheduler $scheduler \
+												--random_seed $random_seed \
+												--print_to_file \
+												--metric_types acc ppv recall f1 \
+												--dataset_types train test
+							done
+						done
+					done
+				done
+			done
+		done
+	done
 done
-
-# # completed
-# python train.py --purpose baseline \
-#                 --data_dir /media/aiffel0042/SSD256/temp/AVIDNet/data/CT \
-#                 --num_labeled 25 \
-#                 --mu 2 \
-#                 --fold 5 \
-#                 --epochs 20 \
-#                 --batch_size 16 \
-#                 --random_seed 0 \
-#                 --overwrite \
-#                 --print_to_file \
-#                 --metric_types acc ppv recall f1 \
-#                 --dataset_types train test
-
-# # to-do list
-# python train.py --purpose baseline \
-#                 --data_dir /media/aiffel0042/SSD256/temp/AVIDNet/data/CT \
-#                 --num_labeled 25 \
-#                 --mu 4 \
-#                 --fold 5 \
-#                 --epochs 20 \
-#                 --batch_size 16 \
-#                 --random_seed 0 \
-#                 --overwrite \
-#                 --print_to_file \
-#                 --metric_types acc ppv recall f1 \
-#                 --dataset_types train test
-
-# python train.py --purpose baseline \
-#                 --data_dir /media/aiffel0042/SSD256/temp/AVIDNet/data/CT \
-#                 --num_labeled 25 \
-#                 --mu 8 \
-#                 --fold 5 \
-#                 --epochs 20 \
-#                 --batch_size 16 \
-#                 --random_seed 0 \
-#                 --overwrite \
-#                 --print_to_file \
-#                 --metric_types acc ppv recall f1 \
-#                 --dataset_types train test
